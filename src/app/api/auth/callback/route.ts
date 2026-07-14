@@ -12,7 +12,8 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const tokens = await getDiscordTokens(code);
+    const redirectUri = `${new URL(req.url).origin}/api/auth/callback`;
+    const tokens = await getDiscordTokens(code, redirectUri);
     const user = await getDiscordUser(tokens.access_token);
 
     const redirectUrl = new URL(state, req.url);

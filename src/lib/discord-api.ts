@@ -36,9 +36,14 @@ export interface DiscordChannel {
 /**
  * Exchanges OAuth authorization code for Discord tokens.
  */
-export async function getDiscordTokens(code: string) {
-  if (!CLIENT_ID || !CLIENT_SECRET || !REDIRECT_URI) {
+export async function getDiscordTokens(code: string, redirectUri?: string) {
+  if (!CLIENT_ID || !CLIENT_SECRET) {
     throw new Error('Missing Discord client configurations in environment variables.');
+  }
+
+  const actualRedirectUri = redirectUri || REDIRECT_URI;
+  if (!actualRedirectUri) {
+    throw new Error('Missing Discord Redirect URI.');
   }
 
   const params = new URLSearchParams({
@@ -46,7 +51,7 @@ export async function getDiscordTokens(code: string) {
     client_secret: CLIENT_SECRET,
     grant_type: 'authorization_code',
     code,
-    redirect_uri: REDIRECT_URI,
+    redirect_uri: actualRedirectUri,
   });
 
   const res = await fetch(`${API_ENDPOINT}/oauth2/token`, {
