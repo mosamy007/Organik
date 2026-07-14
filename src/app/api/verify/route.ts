@@ -37,20 +37,130 @@ export async function GET(req: NextRequest) {
  * POST: Submit signature and verify NFT holdings to grant a role.
  */
 export async function POST(req: NextRequest) {
-  const session = getSession(req);
+  const authHeader = req.headers.get('Authorization');
+  const isBot = authHeader === `Bot ${process.env.DISCORD_BOT_TOKEN}`;
 
-  if (!session) {
-    return NextResponse.json({ error: 'Please log in with Discord first' }, { status: 401 });
+  let session = null;
+  if (!isBot) {
+    session = getSession(req);
+    if (!session) {
+      return NextResponse.json({ error: 'Please log in with Discord first' }, { status: 401 });
+    }
   }
 
   try {
-    const { signature, message, walletAddress, guildId, ruleId, tokenId } = await req.json();
+    const body = await req.json();
+    const db = await getDb();
+
+    // Handle bot-initiated auto-verification
+    if (isBot && body.action === 'auto_verify') {
+      const { discordId, guildId } = body;
+      if (!discordId || !guildId) {
+        return NextResponse.json({ error: 'Missing discordId or guildId' }, { status: 400 });
+      }
+
+      // 1. Check if user has a verified wallet registered
+      const walletRecord = await db.collection('verified_wallets').findOne({ discordId });
+      if (!walletRecord) {
+        return NextResponse.json({
+          success: false,
+          error: 'no_wallet_linked',
+          message: 'No wallet is linked to your Discord account. Please visit the dashboard link to verify and link your wallet.',
+        });
+      }
+
+      const walletAddress = walletRecord.walletAddress;
+
+      // 2. Fetch all rules for this guild
+      const rules = await db.collection('nft_rules').find({ guildId }).toArray();
+      if (rules.length === 0) {
+        return NextResponse.json({
+          success: false,
+          error: 'no_rules',
+          message: 'No NFT verification rules are configured for this server.',
+        });
+      }
+
+      const results = [];
+      let anyAssigned = false;
+
+      for (const rule of rules) {
+        const { contractAddress, network, ruleType, minQuantity, traitType, traitValue, roleId } = rule;
+        let isEligible = false;
+
+        try {
+          if (ruleType === 'quantity') {
+            const balance = await getNftBalance(contractAddress, walletAddress, network);
+            const threshold = minQuantity || 1;
+            isEligible = balance >= threshold;
+          } else if (ruleType === 'trait') {
+            const alchemyApiKey = process.env.ALCHEMY_API_KEY;
+            if (alchemyApiKey) {
+              isEligible = await verifyTraitsViaAlchemy(
+                contractAddress,
+                walletAddress,
+                traitType,
+                traitValue,
+                network
+              );
+            }
+          }
+
+          if (isEligible) {
+            const assigned = await assignGuildRole(guildId, discordId, roleId);
+            if (assigned) {
+              anyAssigned = true;
+              results.push({ roleId, success: true });
+
+              // Save verification record
+              await db.collection('verified_users').updateOne(
+                { discordId, guildId, roleId },
+                {
+                  $set: {
+                    discordId,
+                    guildId,
+                    roleId,
+                    walletAddress,
+                    contractAddress,
+                    verifiedAt: new Date(),
+                  },
+                },
+                { upsert: true }
+              );
+            } else {
+              results.push({ roleId, success: false, error: 'Failed to assign role (check bot role permissions hierarchy)' });
+            }
+          }
+        } catch (err: any) {
+          console.error(`Auto verify failed for rule ${rule._id}:`, err);
+          results.push({ roleId, success: false, error: err.message });
+        }
+      }
+
+      if (anyAssigned) {
+        return NextResponse.json({
+          success: true,
+          walletAddress,
+          message: 'Successfully verified holdings and updated your server roles!',
+          results,
+        });
+      } else {
+        return NextResponse.json({
+          success: false,
+          error: 'not_eligible',
+          walletAddress,
+          message: `Holdings checked for wallet ${walletAddress.substring(0, 6)}...${walletAddress.substring(38)}, but you do not hold the required NFTs.`,
+          results,
+        });
+      }
+    }
+
+    // Handle regular signature verification from the website
+    const { signature, message, walletAddress, guildId, ruleId, tokenId } = body;
 
     if (!signature || !message || !walletAddress || !guildId || !ruleId) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
     }
-
-    const db = await getDb();
 
     // 1. Fetch the NFT verification rule
     let rule;
@@ -71,7 +181,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Ensure the message contains the user's actual Discord ID to prevent signature spoofing
-    if (!message.includes(session.discordId)) {
+    if (!session || !message.includes(session.discordId)) {
       return NextResponse.json(
         { error: 'Signature security check failed: Message does not contain your Discord ID' },
         { status: 400 }

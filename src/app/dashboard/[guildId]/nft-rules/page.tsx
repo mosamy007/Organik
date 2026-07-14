@@ -27,6 +27,16 @@ export default function NftRulesPage({ params }: PageProps) {
   const [traitType, setTraitType] = useState('');
   const [traitValue, setTraitValue] = useState('');
 
+  // Channel & Verification Panel state
+  const [channels, setChannels] = useState<any[]>([]);
+  const [loadingChannels, setLoadingChannels] = useState(true);
+  const [selectedChannelId, setSelectedChannelId] = useState('');
+  const [embedTitle, setEmbedTitle] = useState('🔐 Wallet NFT Verification');
+  const [embedDesc, setEmbedDesc] = useState('Click the buttons below to verify your NFT holdings and receive your exclusive roles.');
+  const [embedImageUrl, setEmbedImageUrl] = useState('');
+  const [panelStatus, setPanelStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
+  const [panelMessage, setPanelMessage] = useState('');
+
   // Status
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [statusMessage, setStatusMessage] = useState('');
@@ -72,9 +82,29 @@ export default function NftRulesPage({ params }: PageProps) {
     }
   };
 
+  // Load channels
+  const loadChannels = async () => {
+    setLoadingChannels(true);
+    try {
+      const res = await fetch(`/api/channels?guildId=${guildId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setChannels(data.channels || []);
+        if (data.channels && data.channels.length > 0) {
+          setSelectedChannelId(data.channels[0].id);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching guild channels:', err);
+    } finally {
+      setLoadingChannels(false);
+    }
+  };
+
   useEffect(() => {
     loadRules();
     loadRoles();
+    loadChannels();
   }, [guildId]);
 
   const handleCreateRule = async (e: React.FormEvent) => {
@@ -159,6 +189,48 @@ export default function NftRulesPage({ params }: PageProps) {
     } catch (err) {
       console.error('Delete rule error:', err);
       alert('An error occurred while deleting the rule.');
+    }
+  };
+
+  const handleSendPanel = async (e: React.FormEvent) => {
+    e.preventDefault();
+
+    if (!selectedChannelId) {
+      setPanelStatus('error');
+      setPanelMessage('Please select a target channel.');
+      return;
+    }
+
+    setPanelStatus('loading');
+    setPanelMessage('Sending verification panel embed to Discord...');
+
+    try {
+      const res = await fetch('/api/verify/panel', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          guildId,
+          channelId: selectedChannelId,
+          title: embedTitle,
+          description: embedDesc,
+          imageUrl: embedImageUrl,
+        }),
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        setPanelStatus('success');
+        setPanelMessage('Verification panel sent to Discord channel successfully!');
+        setEmbedImageUrl('');
+      } else {
+        setPanelStatus('error');
+        setPanelMessage(data.error || 'Failed to send verification panel.');
+      }
+    } catch (err: any) {
+      console.error('Send panel error:', err);
+      setPanelStatus('error');
+      setPanelMessage(err.message || 'An unexpected error occurred.');
     }
   };
 
@@ -385,6 +457,96 @@ export default function NftRulesPage({ params }: PageProps) {
                 <p>No verification rules have been created for this server yet.</p>
               </div>
             )}
+          </div>
+
+          {/* Verification Panel setup */}
+          <div className="glass-card" style={styles.formCard}>
+            <h4 style={{ fontSize: '1.15rem', marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <Shield size={18} color="var(--primary)" /> Send Verification Panel Embed
+            </h4>
+
+            <form onSubmit={handleSendPanel} style={styles.form}>
+              <div className="form-group">
+                <label className="form-label">Discord Target Channel</label>
+                {loadingChannels ? (
+                  <div style={styles.loadingSmall}>
+                    <div className="spinner" style={{ width: '14px', height: '14px' }}></div>
+                    <span>Loading channels...</span>
+                  </div>
+                ) : (
+                  <select
+                    className="form-select"
+                    value={selectedChannelId}
+                    onChange={(e) => setSelectedChannelId(e.target.value)}
+                    required
+                  >
+                    {channels.map((channel) => (
+                      <option key={channel.id} value={channel.id}>
+                        #{channel.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Panel Embed Title</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={embedTitle}
+                  onChange={(e) => setEmbedTitle(e.target.value)}
+                  placeholder="e.g. 🔐 Wallet NFT Verification"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Panel Description</label>
+                <textarea
+                  className="form-input"
+                  style={{ minHeight: '80px', fontFamily: 'inherit', resize: 'vertical' }}
+                  value={embedDesc}
+                  onChange={(e) => setEmbedDesc(e.target.value)}
+                  placeholder="Description shown to users inside the embed"
+                  required
+                />
+              </div>
+
+              <div className="form-group">
+                <label className="form-label">Verification Image URL (Optional)</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  value={embedImageUrl}
+                  onChange={(e) => setEmbedImageUrl(e.target.value)}
+                  placeholder="https://example.com/banner.png"
+                />
+              </div>
+
+              {panelStatus === 'success' && (
+                <div style={styles.statusSuccess}>
+                  <CheckCircle2 size={16} />
+                  <span>{panelMessage}</span>
+                </div>
+              )}
+              {panelStatus === 'error' && (
+                <div style={styles.statusError}>
+                  <ShieldAlert size={16} />
+                  <span>{panelMessage}</span>
+                </div>
+              )}
+
+              <button type="submit" disabled={panelStatus === 'loading'} className="btn btn-primary" style={{ width: '100%' }}>
+                {panelStatus === 'loading' ? (
+                  <>
+                    <div className="spinner" style={{ width: '16px', height: '16px' }}></div> Sending Panel...
+                  </>
+                ) : (
+                  'Send Verification Panel to Discord'
+                )}
+              </button>
+            </form>
           </div>
 
           {/* Setup Advice */}

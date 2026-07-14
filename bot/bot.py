@@ -32,23 +32,97 @@ if MONGODB_URI:
 else:
     print("WARNING: MONGODB_URI is not set. Database commands will not function.")
 
+import aiohttp
+
 # Setup Discord Bot
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# API helper to call Next.js auto-verify endpoint
+async def call_auto_verify(discord_id: str, guild_id: str):
+    url = f"{APP_URL}/api/verify"
+    headers = {
+        "Authorization": f"Bot {TOKEN}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "action": "auto_verify",
+        "discordId": discord_id,
+        "guildId": guild_id
+    }
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(url, json=payload, headers=headers) as resp:
+                if resp.status == 200:
+                    return await resp.json()
+                else:
+                    try:
+                        err_data = await resp.json()
+                        return {
+                            "success": False,
+                            "error": err_data.get("error", "API returned error"),
+                            "message": err_data.get("message", "")
+                        }
+                    except:
+                        return {"success": False, "error": f"API returned status {resp.status}"}
+    except Exception as e:
+        return {"success": False, "error": str(e)}
+
 # UI views
 class VerifyLinkView(discord.ui.View):
-    def __init__(self, guild_id: str):
+    def __init__(self, guild_id: str = None):
         super().__init__(timeout=None)
-        verify_url = f"{APP_URL}/verify?guildId={guild_id}"
-        self.add_item(
-            discord.ui.Button(
-                label="Verify Wallet",
-                url=verify_url,
-                emoji="🔐",
-                style=discord.ButtonStyle.link
+        self.guild_id = guild_id
+        if guild_id:
+            verify_url = f"{APP_URL}/verify?guildId={guild_id}"
+            self.add_item(
+                discord.ui.Button(
+                    label="Link New Wallet",
+                    url=verify_url,
+                    emoji="🔗",
+                    style=discord.ButtonStyle.link,
+                    row=0
+                )
             )
-        )
+
+    @discord.ui.button(label="Verify NFT Roles", style=discord.ButtonStyle.success, emoji="🔐", custom_id="auto_verify_btn", row=0)
+    async def auto_verify(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        
+        guild_id = str(interaction.guild_id)
+        res = await call_auto_verify(str(interaction.user.id), guild_id)
+        
+        if res.get("success"):
+            wallet = res.get("walletAddress", "")
+            wallet_short = f"{wallet[:6]}...{wallet[-4:]}" if len(wallet) > 10 else wallet
+            await interaction.followup.send(
+                content=f"✅ **Verification Success!**\nRegistered Wallet: `{wallet_short}`\n\n{res.get('message', 'Your roles have been updated.')}",
+                ephemeral=True
+            )
+        else:
+            err_type = res.get("error")
+            wallet = res.get("walletAddress", "")
+            wallet_short = f"{wallet[:6]}...{wallet[-4:]}" if len(wallet) > 10 else wallet
+            
+            if err_type == "no_wallet_linked":
+                verify_url = f"{APP_URL}/verify?guildId={guild_id}"
+                view = discord.ui.View()
+                view.add_item(discord.ui.Button(label="Link Wallet Now", url=verify_url, style=discord.ButtonStyle.link))
+                await interaction.followup.send(
+                    content="❌ **No Wallet Registered!**\nYou haven't linked an EVM wallet to your Discord account yet. Please click below to verify and link your wallet.",
+                    view=view,
+                    ephemeral=True
+                )
+            elif err_type == "not_eligible":
+                await interaction.followup.send(
+                    content=f"❌ **Holdings Check Failed!**\nChecked Wallet: `{wallet_short}`\n\nYou do not hold the required NFTs for any verification rules in this server.",
+                    ephemeral=True
+                )
+            else:
+                await interaction.followup.send(
+                    content=f"❌ **Verification Error:** {res.get('message') or res.get('error') or 'An unexpected error occurred.'}",
+                    ephemeral=True
+                )
 
 class GiveawayLinkView(discord.ui.View):
     def __init__(self, giveaway_id: str, guild_id: str):
@@ -65,6 +139,8 @@ class GiveawayLinkView(discord.ui.View):
 
 @bot.event
 async def on_ready():
+    # Register persistent verification view
+    bot.add_view(VerifyLinkView())
     # Sync the bot slash commands globally
     try:
         synced = await bot.tree.sync()

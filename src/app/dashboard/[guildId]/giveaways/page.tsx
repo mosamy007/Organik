@@ -28,6 +28,12 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
   const [rewardRoleId, setRewardRoleId] = useState('');
   const [restrictRoleId, setRestrictRoleId] = useState(''); // Empty string = Everyone
 
+  // Channel & Image fields
+  const [channels, setChannels] = useState<any[]>([]);
+  const [loadingChannels, setLoadingChannels] = useState(true);
+  const [selectedChannelId, setSelectedChannelId] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+
   // Tasks Builder State
   const [tasks, setTasks] = useState<any[]>([
     { id: 't1', type: 'wallet_input', label: 'Submit EVM Wallet Address', required: true }
@@ -76,9 +82,29 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
     }
   };
 
+  // Load channels
+  const loadChannels = async () => {
+    setLoadingChannels(true);
+    try {
+      const res = await fetch(`/api/channels?guildId=${guildId}`);
+      if (res.ok) {
+        const data = await res.json();
+        setChannels(data.channels || []);
+        if (data.channels && data.channels.length > 0) {
+          setSelectedChannelId(data.channels[0].id);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching guild channels:', err);
+    } finally {
+      setLoadingChannels(false);
+    }
+  };
+
   useEffect(() => {
     loadGiveaways();
     loadRoles();
+    loadChannels();
   }, [guildId]);
 
   const handleAddTask = (type: 'wallet_input' | 'custom_link') => {
@@ -98,6 +124,41 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
     setTasks((prev) =>
       prev.map((t) => (t.id === id ? { ...t, ...updates } : t))
     );
+  };
+
+  const formatLocalDatetime = (date: Date) => {
+    const tzOffset = date.getTimezoneOffset() * 60000;
+    return new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+  };
+
+  const applyTimePreset = (preset: string) => {
+    const now = new Date();
+    switch (preset) {
+      case '1h':
+        now.setHours(now.getHours() + 1);
+        break;
+      case '6h':
+        now.setHours(now.getHours() + 6);
+        break;
+      case '12h':
+        now.setHours(now.getHours() + 12);
+        break;
+      case '1d':
+        now.setDate(now.getDate() + 1);
+        break;
+      case '2d':
+        now.setDate(now.getDate() + 2);
+        break;
+      case '3d':
+        now.setDate(now.getDate() + 3);
+        break;
+      case '7d':
+        now.setDate(now.getDate() + 7);
+        break;
+      default:
+        break;
+    }
+    setEndTime(formatLocalDatetime(now));
   };
 
   const handleCreateGiveaway = async (e: React.FormEvent) => {
@@ -127,12 +188,15 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
     try {
       const payload = {
         guildId,
+        title: prize.trim(),
         prize: prize.trim(),
         description: description.trim(),
         winnerCount: Number(winnerCount),
         endTime: new Date(endTime).toISOString(),
         rewardRoleId: rewardRoleId || undefined,
         restrictRoleId: restrictRoleId || undefined,
+        channelId: selectedChannelId || undefined,
+        imageUrl: imageUrl.trim() || undefined,
         tasks: tasks.map((t) => ({
           id: t.id,
           type: t.type,
@@ -158,6 +222,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
         setDescription('');
         setWinnerCount('1');
         setEndTime('');
+        setImageUrl('');
         setRestrictRoleId('');
         setTasks([{ id: 't1', type: 'wallet_input', label: 'Submit EVM Wallet Address', required: true }]);
         // Reload giveaways
@@ -268,6 +333,41 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
 
             <div style={styles.formRow}>
               <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">Announcement Channel</label>
+                {loadingChannels ? (
+                  <div style={styles.loadingSmall}>
+                    <div className="spinner" style={{ width: '14px', height: '14px' }}></div>
+                  </div>
+                ) : (
+                  <select
+                    className="form-select"
+                    value={selectedChannelId}
+                    onChange={(e) => setSelectedChannelId(e.target.value)}
+                    required
+                  >
+                    {channels.map((channel) => (
+                      <option key={channel.id} value={channel.id}>
+                        #{channel.name}
+                      </option>
+                    ))}
+                  </select>
+                )}
+              </div>
+
+              <div className="form-group" style={{ flex: 1 }}>
+                <label className="form-label">Giveaway Image URL (Optional)</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="https://example.com/giveaway-banner.png"
+                  value={imageUrl}
+                  onChange={(e) => setImageUrl(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div style={styles.formRow}>
+              <div className="form-group" style={{ flex: 1 }}>
                 <label className="form-label">Winner Count</label>
                 <input
                   type="number"
@@ -288,6 +388,26 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
                   onChange={(e) => setEndTime(e.target.value)}
                   required
                 />
+                <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap', marginTop: '6px' }}>
+                  {['1h', '6h', '12h', '1d', '2d', '3d', '7d'].map((preset) => (
+                    <button
+                      key={preset}
+                      type="button"
+                      onClick={() => applyTimePreset(preset)}
+                      style={{
+                        background: 'rgba(255,255,255,0.05)',
+                        border: '1px solid var(--border-color)',
+                        color: 'var(--text-secondary)',
+                        padding: '4px 10px',
+                        borderRadius: '6px',
+                        fontSize: '0.75rem',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      {preset}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 

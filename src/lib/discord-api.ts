@@ -191,13 +191,15 @@ export async function assignGuildRole(guildId: string, userId: string, roleId: s
 export async function sendChannelMessage(
   channelId: string,
   content: string,
-  embeds?: any[]
+  embeds?: any[],
+  components?: any[]
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   if (!BOT_TOKEN) throw new Error('Missing Discord Bot Token.');
 
   const body: any = {};
   if (content) body.content = content;
   if (embeds) body.embeds = embeds;
+  if (components) body.components = components;
 
   const res = await fetch(`${API_ENDPOINT}/channels/${channelId}/messages`, {
     method: 'POST',

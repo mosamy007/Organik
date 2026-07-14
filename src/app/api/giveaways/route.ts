@@ -80,10 +80,12 @@ export async function POST(req: NextRequest) {
   const session = getSession(req);
 
   try {
-    const { guildId, title, description, prize, allowedRoles, winnerRoleRewardId, endTime, winnerCount, tasks, channelId } =
+    const { guildId, title, description, prize, allowedRoles, winnerRoleRewardId, endTime, winnerCount, tasks, channelId, imageUrl } =
       await req.json();
 
-    if (!guildId || !title || !prize || !endTime || !winnerCount) {
+    const actualTitle = title?.trim() || prize?.trim();
+
+    if (!guildId || !actualTitle || !prize || !endTime || !winnerCount) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
     }
 
@@ -96,9 +98,10 @@ export async function POST(req: NextRequest) {
     const db = await getDb();
     const newGiveaway: any = {
       guildId,
-      title: title.trim(),
+      title: actualTitle,
       description: description?.trim() || '',
       prize: prize.trim(),
+      imageUrl: imageUrl?.trim() || null,
       allowedRoles: Array.isArray(allowedRoles) ? allowedRoles : [],
       winnerRoleRewardId: winnerRoleRewardId || null,
       endTime: new Date(endTime),
@@ -114,8 +117,9 @@ export async function POST(req: NextRequest) {
     // If channelId is provided, automatically announce the giveaway in Discord
     if (channelId) {
       try {
-        const giveawayUrl = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/giveaways?id=${result.insertedId}`;
-        const embed = {
+        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const giveawayUrl = `${appUrl}/giveaways?id=${result.insertedId}&guildId=${guildId}`;
+        const embed: any = {
           title: `🎉 NEW GIVEAWAY: ${newGiveaway.prize} 🎉`,
           description: `${newGiveaway.description}\n\n**Prize:** ${newGiveaway.prize}\n**Winners:** ${newGiveaway.winnerCount}\n**Ends At:** <t:${Math.floor(newGiveaway.endTime.getTime() / 1000)}:R>`,
           color: 0x5865f2,
@@ -129,11 +133,31 @@ export async function POST(req: NextRequest) {
             },
             {
               name: 'How to Enter',
-              value: `Click the link below, log in, complete tasks, and join!\n👉 [Join Giveaway Portal](${giveawayUrl})`,
+              value: `Click the "Enter Giveaway" button below, log in, complete tasks, and join!`,
             },
           ],
         };
-        await sendChannelMessage(channelId, '', [embed]);
+
+        if (newGiveaway.imageUrl) {
+          embed.image = { url: newGiveaway.imageUrl };
+        }
+
+        const components = [
+          {
+            type: 1, // ACTION_ROW
+            components: [
+              {
+                type: 2, // BUTTON
+                style: 5, // LINK
+                label: 'Enter Giveaway',
+                url: giveawayUrl,
+                emoji: { name: '🎉' },
+              },
+            ],
+          },
+        ];
+
+        await sendChannelMessage(channelId, '', [embed], components);
       } catch (err) {
         console.error('Failed to announce giveaway in Discord channel:', err);
       }
