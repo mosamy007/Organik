@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
-import { verifyGuildAdmin } from '@/lib/auth-helpers';
+import { checkGuildAdmin } from '@/lib/auth-helpers';
 import { getGuildChannels } from '@/lib/discord-api';
 
 export async function GET(req: NextRequest) {
@@ -13,9 +13,9 @@ export async function GET(req: NextRequest) {
   }
 
   // Authorize admin
-  const isAdmin = await verifyGuildAdmin(session, guildId);
-  if (!isAdmin) {
-    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  const authCheck = await checkGuildAdmin(session, guildId);
+  if (!authCheck.authorized) {
+    return NextResponse.json({ error: authCheck.reason }, { status: 403 });
   }
 
   try {

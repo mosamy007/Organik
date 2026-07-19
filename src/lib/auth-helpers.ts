@@ -39,3 +39,50 @@ export async function verifyGuildAdmin(session: SessionData | null, guildId: str
     return false;
   }
 }
+
+/**
+ * Diagnostic version of verifyGuildAdmin returning detailed authorization reasons.
+ */
+export async function checkGuildAdmin(
+  session: SessionData | null,
+  guildId: string
+): Promise<{ authorized: boolean; reason: string }> {
+  if (!session) {
+    return { authorized: false, reason: 'No active login session. Please log out and log in again.' };
+  }
+
+  try {
+    const guilds = await getDiscordUserGuilds(session.accessToken);
+    const target = guilds.find((g) => g.id === guildId);
+
+    if (!target) {
+      return {
+        authorized: false,
+        reason: `Your account is not a member of server ${guildId}, or your token lacks permissions. Please try logging out and logging in again to refresh your session.`
+      };
+    }
+
+    if (target.owner) {
+      return { authorized: true, reason: 'Owner' };
+    }
+
+    const perms = BigInt(target.permissions);
+    const hasAdmin = (perms & ADMIN_PERMISSION) === ADMIN_PERMISSION;
+    const hasManage = (perms & MANAGE_GUILD_PERMISSION) === MANAGE_GUILD_PERMISSION;
+
+    if (hasAdmin || hasManage) {
+      return { authorized: true, reason: 'Authorized' };
+    }
+
+    return {
+      authorized: false,
+      reason: `Required permissions missing on server "${target.name}". You need Administrator or Manage Server permissions.`
+    };
+  } catch (err: any) {
+    console.error('[checkGuildAdmin] Error:', err);
+    return {
+      authorized: false,
+      reason: `Failed to fetch Discord server permissions: ${err.message || 'Unknown error'}. Try logging out and back in.`
+    };
+  }
+}
