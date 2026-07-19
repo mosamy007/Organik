@@ -99,7 +99,14 @@ export async function getDiscordUserGuilds(accessToken: string): Promise<Discord
   });
 
   if (!res.ok) {
-    throw new Error('Failed to retrieve Discord user guilds.');
+    let errBody = '';
+    try {
+      errBody = await res.text();
+    } catch (e) {
+      errBody = 'Unknown error';
+    }
+    console.error(`[getDiscordUserGuilds] Failed: Status ${res.status}, Response: ${errBody}`);
+    throw new Error(`Discord API returned status ${res.status}: ${errBody}`);
   }
 
   return res.json();
