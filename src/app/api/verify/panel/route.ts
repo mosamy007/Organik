@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || `${new URL(req.url).origin}`;
+    const appUrl = `${new URL(req.url).origin}`;
     const verifyUrl = `${appUrl}/verify?guildId=${guildId}`;
 
     const embed: any = {

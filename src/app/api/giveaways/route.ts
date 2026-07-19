@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
     // If channelId is provided, automatically announce the giveaway in Discord
     if (channelId) {
       try {
-        const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000';
+        const appUrl = `${new URL(req.url).origin}`;
         const giveawayUrl = `${appUrl}/giveaways?id=${result.insertedId}&guildId=${guildId}`;
         const embed: any = {
           title: `🎉 NEW GIVEAWAY: ${newGiveaway.prize} 🎉`,
