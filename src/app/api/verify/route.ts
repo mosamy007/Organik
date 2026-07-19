@@ -85,6 +85,7 @@ export async function POST(req: NextRequest) {
 
       const results = [];
       let anyAssigned = false;
+      let anyEligible = false;
 
       for (const rule of rules) {
         const { contractAddress, network, ruleType, minQuantity, traitType, traitValue, roleId } = rule;
@@ -129,6 +130,7 @@ export async function POST(req: NextRequest) {
           }
 
           if (isEligible) {
+            anyEligible = true;
             const assigned = await assignGuildRole(guildId, discordId, roleId);
             if (assigned) {
               anyAssigned = true;
@@ -164,6 +166,14 @@ export async function POST(req: NextRequest) {
           success: true,
           walletAddress,
           message: 'Successfully verified holdings and updated your server roles!',
+          results,
+        });
+      } else if (anyEligible) {
+        return NextResponse.json({
+          success: false,
+          error: 'role_assignment_failed',
+          walletAddress,
+          message: 'You hold the required NFTs, but the bot lacks permission to assign the role. Please ask server admins to move the "Organik Bot" role higher in Server Settings.',
           results,
         });
       } else {

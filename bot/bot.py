@@ -137,6 +137,10 @@ class VerifyLinkView(discord.ui.View):
                     view=view,
                     ephemeral=True
                 )
+            elif err_type == "role_assignment_failed":
+                await loading_msg.edit(
+                    content=f"⚠️ **Role Assignment Failed!**\nChecked Wallet: `{wallet_short}`\n\n**You hold the required NFTs**, but the bot lacks permission to assign the role in this server.\n\n👉 **Server Admins:** Please go to **Server Settings -> Roles**, and drag the **Organik Bot** role so that it is positioned **above** the verified role."
+                )
             elif err_type == "not_eligible":
                 await loading_msg.edit(
                     content=f"❌ **Holdings Check Failed!**\nChecked Wallet: `{wallet_short}`\n\nYou do not hold the required NFTs for any verification rules in this server."
