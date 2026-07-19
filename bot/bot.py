@@ -107,6 +107,11 @@ class VerifyLinkView(discord.ui.View):
     @discord.ui.button(label="Verify NFT Roles", style=discord.ButtonStyle.success, emoji="🔐", custom_id="auto_verify_btn", row=0)
     async def auto_verify(self, interaction: discord.Interaction, button: discord.ui.Button):
         await interaction.response.defer(ephemeral=True)
+        # Send real-time progress feedback to the user
+        loading_msg = await interaction.followup.send(
+            content="🔍 **Checking NFT holdings on multiple chains...** Please wait a moment.",
+            ephemeral=True
+        )
         
         guild_id = str(interaction.guild_id)
         res = await call_auto_verify(str(interaction.user.id), guild_id)
@@ -114,9 +119,8 @@ class VerifyLinkView(discord.ui.View):
         if res.get("success"):
             wallet = res.get("walletAddress", "")
             wallet_short = f"{wallet[:6]}...{wallet[-4:]}" if len(wallet) > 10 else wallet
-            await interaction.followup.send(
-                content=f"✅ **Verification Success!**\nRegistered Wallet: `{wallet_short}`\n\n{res.get('message', 'Your roles have been updated.')}",
-                ephemeral=True
+            await loading_msg.edit(
+                content=f"✅ **Verification Success!**\nRegistered Wallet: `{wallet_short}`\n\n{res.get('message', 'Your roles have been updated.')}"
             )
         else:
             err_type = res.get("error")
@@ -127,20 +131,19 @@ class VerifyLinkView(discord.ui.View):
                 verify_url = f"{get_app_url()}/verify?guildId={guild_id}"
                 view = discord.ui.View()
                 view.add_item(discord.ui.Button(label="Link Wallet Now", url=verify_url, style=discord.ButtonStyle.link))
+                await loading_msg.delete()
                 await interaction.followup.send(
                     content="❌ **No Wallet Registered!**\nYou haven't linked an EVM wallet to your Discord account yet. Please click below to verify and link your wallet.",
                     view=view,
                     ephemeral=True
                 )
             elif err_type == "not_eligible":
-                await interaction.followup.send(
-                    content=f"❌ **Holdings Check Failed!**\nChecked Wallet: `{wallet_short}`\n\nYou do not hold the required NFTs for any verification rules in this server.",
-                    ephemeral=True
+                await loading_msg.edit(
+                    content=f"❌ **Holdings Check Failed!**\nChecked Wallet: `{wallet_short}`\n\nYou do not hold the required NFTs for any verification rules in this server."
                 )
             else:
-                await interaction.followup.send(
-                    content=f"❌ **Verification Error:** {res.get('message') or res.get('error') or 'An unexpected error occurred.'}",
-                    ephemeral=True
+                await loading_msg.edit(
+                    content=f"❌ **Verification Error:** {res.get('message') or res.get('error') or 'An unexpected error occurred.'}"
                 )
 
 class GiveawayLinkView(discord.ui.View):

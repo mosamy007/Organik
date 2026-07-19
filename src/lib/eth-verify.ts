@@ -79,9 +79,11 @@ export async function getNftBalance(
   network = 'ethereum'
 ): Promise<number> {
   try {
+    const cleanContract = contractAddress.trim().toLowerCase();
+    const cleanWallet = walletAddress.trim().toLowerCase();
     const provider = getProvider(network);
-    const contract = new ethers.Contract(contractAddress, ERC721_ABI, provider);
-    const balance = await contract.balanceOf(walletAddress);
+    const contract = new ethers.Contract(cleanContract, ERC721_ABI, provider);
+    const balance = await contract.balanceOf(cleanWallet);
     return Number(balance);
   } catch (err) {
     console.error('Error checking ERC-721 balance, trying ERC-1155...', err);
@@ -102,8 +104,10 @@ export async function verifySpecificTokenTraits(
   network = 'ethereum'
 ): Promise<{ success: boolean; message: string }> {
   try {
+    const cleanContract = contractAddress.trim().toLowerCase();
+    const cleanWallet = walletAddress.trim().toLowerCase();
     const provider = getProvider(network);
-    const contract = new ethers.Contract(contractAddress, ERC721_ABI, provider);
+    const contract = new ethers.Contract(cleanContract, ERC721_ABI, provider);
 
     // 1. Verify owner of the tokenId
     let owner: string;
@@ -111,16 +115,16 @@ export async function verifySpecificTokenTraits(
       owner = await contract.ownerOf(tokenId);
     } catch {
       // Try ERC-1155 check (needs balance of wallet > 0)
-      const erc1155Contract = new ethers.Contract(contractAddress, ERC1155_ABI, provider);
-      const balance = await erc1155Contract.balanceOf(walletAddress, tokenId);
+      const erc1155Contract = new ethers.Contract(cleanContract, ERC1155_ABI, provider);
+      const balance = await erc1155Contract.balanceOf(cleanWallet, tokenId);
       if (Number(balance) > 0) {
-        owner = walletAddress;
+        owner = cleanWallet;
       } else {
         return { success: false, message: 'You do not own this Token ID or contract does not exist.' };
       }
     }
 
-    if (owner.toLowerCase() !== walletAddress.toLowerCase()) {
+    if (owner.toLowerCase() !== cleanWallet.toLowerCase()) {
       return { success: false, message: `Token ID ${tokenId} is owned by another address: ${owner}` };
     }
 
