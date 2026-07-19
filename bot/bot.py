@@ -1,6 +1,13 @@
 import os
 import sys
+import io
 from dotenv import load_dotenv
+
+# Force UTF-8 encoding for standard output/error to prevent UnicodeEncodeErrors on Windows
+if hasattr(sys.stdout, 'buffer'):
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+if hasattr(sys.stderr, 'buffer'):
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 import discord
 from discord.ext import commands
@@ -15,7 +22,7 @@ MONGODB_URI = os.getenv("MONGODB_URI")
 APP_URL = os.getenv("APP_URL", "http://localhost:3000")
 
 if not TOKEN:
-    print("CRITICAL ERROR: Discord bot token is missing in .env")
+    print("[CRITICAL] Discord bot token is missing in .env")
     sys.exit(1)
 
 # Setup MongoDB connection
@@ -26,11 +33,11 @@ if MONGODB_URI:
         # Extract database name if specified in URI, otherwise default to 'organik_bot'
         db_name = MONGODB_URI.split("/")[-1].split("?")[0] or "organik_bot"
         db = client[db_name]
-        print(f"✅ Successfully connected to MongoDB database: {db_name}")
+        print(f"[SUCCESS] Connected to MongoDB database: {db_name}")
     except Exception as e:
-        print(f"❌ Failed to connect to MongoDB: {e}")
+        print(f"[ERROR] Failed to connect to MongoDB: {e}")
 else:
-    print("WARNING: MONGODB_URI is not set. Database commands will not function.")
+    print("[WARNING] MONGODB_URI is not set. Database commands will not function.")
 
 import aiohttp
 
@@ -47,7 +54,7 @@ def get_app_url():
                 url = settings.get("appUrl")
                 return url[:-1] if url.endswith("/") else url
         except Exception as e:
-            print(f"⚠️ Error reading global_settings: {e}")
+            print(f"[WARNING] Error reading global_settings: {e}")
     return APP_URL
 
 # API helper to call Next.js auto-verify endpoint
@@ -156,10 +163,10 @@ async def on_ready():
     # Sync the bot slash commands globally
     try:
         synced = await bot.tree.sync()
-        print(f"🔄 Synced {len(synced)} slash commands globally.")
+        print(f"[SYNC] Synced {len(synced)} slash commands globally.")
     except Exception as e:
-        print(f"❌ Failed to sync slash commands: {e}")
-    print(f"🚀 Organik Bot is active and logged in as: {bot.user}")
+        print(f"[ERROR] Failed to sync slash commands: {e}")
+    print(f"[READY] Organik Bot is active and logged in as: {bot.user}")
 
 # /verify command - Send ephemeral verification button for user
 @bot.tree.command(name="verify", description="Get your NFT verification link")
