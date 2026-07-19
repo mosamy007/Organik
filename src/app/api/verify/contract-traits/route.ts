@@ -4,7 +4,97 @@ import { verifyGuildAdmin } from '@/lib/auth-helpers';
 import { getDb } from '@/lib/mongodb';
 
 /**
- * GET: Retrieve attribute summary for an NFT contract from Alchemy (with MongoDB Caching).
+ * Helper to fetch traits from OpenSea v2 API.
+ */
+async function fetchFromOpenSea(contractAddress: string, network: string, apiKey: string): Promise<Record<string, string[]>> {
+  // OpenSea chain mapping (standard matches: ethereum, polygon, base, arbitrum, optimism, sepolia)
+  const chainName = network.trim().toLowerCase();
+
+  // 1. Get collection slug from contract endpoint
+  const contractUrl = `https://api.opensea.io/api/v2/chain/${chainName}/contract/${contractAddress}`;
+  const contractRes = await fetch(contractUrl, {
+    headers: {
+      'x-api-key': apiKey,
+      'accept': 'application/json'
+    }
+  });
+
+  if (!contractRes.ok) {
+    const errText = await contractRes.text().catch(() => '');
+    throw new Error(`OpenSea contract query failed (Status ${contractRes.status}): ${errText || contractRes.statusText}`);
+  }
+
+  const contractData = await contractRes.json();
+  const slug = contractData.collection;
+  if (!slug) {
+    throw new Error(`No collection slug found on OpenSea for contract ${contractAddress}`);
+  }
+
+  // 2. Get traits list using collection slug
+  const traitsUrl = `https://api.opensea.io/api/v2/traits/${slug}`;
+  const traitsRes = await fetch(traitsUrl, {
+    headers: {
+      'x-api-key': apiKey,
+      'accept': 'application/json'
+    }
+  });
+
+  if (!traitsRes.ok) {
+    const errText = await traitsRes.text().catch(() => '');
+    throw new Error(`OpenSea traits query failed (Status ${traitsRes.status}): ${errText || traitsRes.statusText}`);
+  }
+
+  const traitsData = await traitsRes.json();
+  const rawTraits = traitsData.traits || {};
+
+  // Transform rawTraits to Record<string, string[]> format
+  const traits: Record<string, string[]> = {};
+  for (const [traitType, valuesObj] of Object.entries(rawTraits)) {
+    if (valuesObj && typeof valuesObj === 'object') {
+      traits[traitType] = Object.keys(valuesObj);
+    }
+  }
+
+  return traits;
+}
+
+/**
+ * Helper to fetch traits from Alchemy NFT API.
+ */
+async function fetchFromAlchemy(contractAddress: string, network: string, apiKey: string): Promise<Record<string, string[]>> {
+  const ALCHEMY_SUBDOMAINS: Record<string, string> = {
+    ethereum: 'eth-mainnet',
+    sepolia: 'eth-sepolia',
+    polygon: 'polygon-mainnet',
+    arbitrum: 'arb-mainnet',
+    optimism: 'opt-mainnet',
+    base: 'base-mainnet',
+  };
+
+  const subdomain = ALCHEMY_SUBDOMAINS[network] || 'eth-mainnet';
+  const url = `https://${subdomain}.g.alchemy.com/nft/v3/${apiKey}/summarizeNFTAttributes?contractAddress=${contractAddress}`;
+
+  const res = await fetch(url);
+  if (!res.ok) {
+    const errText = await res.text().catch(() => '');
+    throw new Error(`Alchemy query failed (Status ${res.status}): ${errText || res.statusText}`);
+  }
+
+  const data = await res.json();
+  const summary = data.summary || {};
+
+  const traits: Record<string, string[]> = {};
+  for (const [traitType, valuesObj] of Object.entries(summary)) {
+    if (valuesObj && typeof valuesObj === 'object') {
+      traits[traitType] = Object.keys(valuesObj);
+    }
+  }
+
+  return traits;
+}
+
+/**
+ * GET: Retrieve attribute summary for an NFT contract (with OpenSea + Alchemy Dual Providers and MongoDB Caching).
  */
 export async function GET(req: NextRequest) {
   const session = getSession(req);
@@ -50,97 +140,71 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  // 2. Fetch from Alchemy if not in cache or if cache is stale
-  const apiKey = process.env.ALCHEMY_API_KEY;
-  if (!apiKey) {
-    // If no API key but we have stale cache, fall back to it
-    if (cachedRecord) {
-      console.log(`[contract-traits] Missing ALCHEMY_API_KEY. Falling back to stale cache.`);
-      return NextResponse.json({ success: true, traits: cachedRecord.traits });
-    }
-    return NextResponse.json({
-      error: 'Alchemy API Key is not configured on the server. Please add ALCHEMY_API_KEY to your env variables.'
-    }, { status: 500 });
-  }
+  // Errors list to collect issues if both providers fail
+  const fetchErrors: string[] = [];
 
-  const ALCHEMY_SUBDOMAINS: Record<string, string> = {
-    ethereum: 'eth-mainnet',
-    sepolia: 'eth-sepolia',
-    polygon: 'polygon-mainnet',
-    arbitrum: 'arb-mainnet',
-    optimism: 'opt-mainnet',
-    base: 'base-mainnet',
-  };
-
-  const subdomain = ALCHEMY_SUBDOMAINS[network] || 'eth-mainnet';
-  const url = `https://${subdomain}.g.alchemy.com/nft/v3/${apiKey}/summarizeNFTAttributes?contractAddress=${cleanAddress}`;
-
-  try {
-    const res = await fetch(url);
-    
-    if (!res.ok) {
-      // Fallback to stale cache if request fails (e.g. rate limited 429)
-      if (cachedRecord) {
-        console.warn(`[contract-traits] Alchemy request failed with status ${res.status}. Falling back to stale cache.`);
-        return NextResponse.json({ success: true, traits: cachedRecord.traits });
-      }
-
-      const errText = await res.text();
-      let parsedError = 'Failed to fetch attributes';
-      try {
-        const parsed = JSON.parse(errText);
-        parsedError = parsed.error?.message || parsed.message || errText;
-      } catch {
-        parsedError = errText || res.statusText;
-      }
-
-      // If rate limited, append helpful guidance to manual mode
-      if (res.status === 429) {
-        parsedError = `${parsedError}. (Alchemy Rate Limited. You can click 'Use Manual Input' above to type traits manually instead.)`;
-      }
-
-      return NextResponse.json({ error: `Alchemy error: ${parsedError}` }, { status: res.status });
-    }
-
-    const data = await res.json();
-    const summary = data.summary || {};
-
-    // Transform summary mapping to list of unique values per attribute
-    const traits: Record<string, string[]> = {};
-    for (const [traitType, valuesObj] of Object.entries(summary)) {
-      if (valuesObj && typeof valuesObj === 'object') {
-        traits[traitType] = Object.keys(valuesObj);
-      }
-    }
-
-    // 3. Save/Update cache in MongoDB
+  // 2. Try OpenSea first if key is configured
+  const openseaKey = process.env.OPENSEA_API_KEY;
+  if (openseaKey) {
     try {
-      await db.collection('contract_traits_cache').updateOne(
-        cacheKey,
-        {
-          $set: {
-            contractAddress: cleanAddress,
-            network,
-            traits,
-            updatedAt: new Date(),
-          }
-        },
-        { upsert: true }
-      );
-    } catch (saveErr) {
-      console.error('[contract-traits] Failed to save traits cache:', saveErr);
-    }
+      console.log(`[contract-traits] Attempting to fetch traits from OpenSea for ${cleanAddress}...`);
+      const traits = await fetchFromOpenSea(cleanAddress, network, openseaKey);
+      
+      // Save/Update cache in MongoDB
+      try {
+        await db.collection('contract_traits_cache').updateOne(
+          cacheKey,
+          { $set: { contractAddress: cleanAddress, network, traits, updatedAt: new Date() } },
+          { upsert: true }
+        );
+      } catch (saveErr) {
+        console.error('[contract-traits] Failed to save traits cache:', saveErr);
+      }
 
-    return NextResponse.json({ success: true, traits });
-  } catch (err: any) {
-    console.error('Error in contract-traits API:', err);
-    
-    // Fallback to stale cache on exception
-    if (cachedRecord) {
-      console.warn(`[contract-traits] Exception occurred. Falling back to stale cache.`);
-      return NextResponse.json({ success: true, traits: cachedRecord.traits });
+      return NextResponse.json({ success: true, traits });
+    } catch (osErr: any) {
+      console.error('[contract-traits] OpenSea fetch failed:', osErr.message);
+      fetchErrors.push(`OpenSea: ${osErr.message}`);
     }
-
-    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
   }
+
+  // 3. Fallback to Alchemy if OpenSea failed or wasn't configured
+  const alchemyKey = process.env.ALCHEMY_API_KEY;
+  if (alchemyKey) {
+    try {
+      console.log(`[contract-traits] Attempting to fetch traits from Alchemy for ${cleanAddress}...`);
+      const traits = await fetchFromAlchemy(cleanAddress, network, alchemyKey);
+
+      // Save/Update cache in MongoDB
+      try {
+        await db.collection('contract_traits_cache').updateOne(
+          cacheKey,
+          { $set: { contractAddress: cleanAddress, network, traits, updatedAt: new Date() } },
+          { upsert: true }
+        );
+      } catch (saveErr) {
+        console.error('[contract-traits] Failed to save traits cache:', saveErr);
+      }
+
+      return NextResponse.json({ success: true, traits });
+    } catch (alcErr: any) {
+      console.error('[contract-traits] Alchemy fetch failed:', alcErr.message);
+      fetchErrors.push(`Alchemy: ${alcErr.message}`);
+    }
+  }
+
+  // 4. If all active queries failed, try to serve stale cache
+  if (cachedRecord) {
+    console.warn(`[contract-traits] All fetches failed. Falling back to stale database cache.`);
+    return NextResponse.json({ success: true, traits: cachedRecord.traits });
+  }
+
+  // 5. If everything failed and no cache, return error report
+  const combinedError = fetchErrors.join(' | ') || 'No trait-fetching keys configured on the server.';
+  let clientMessage = combinedError;
+  if (combinedError.includes('429')) {
+    clientMessage = `${combinedError}. (Rate limit hit. You can click 'Use Manual Input' above to type traits manually.)`;
+  }
+
+  return NextResponse.json({ error: clientMessage }, { status: 502 });
 }

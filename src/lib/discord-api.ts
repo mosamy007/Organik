@@ -92,6 +92,22 @@ export async function getDiscordUser(accessToken: string): Promise<DiscordUser> 
  * Fetches user guilds using OAuth access token.
  */
 export async function getDiscordUserGuilds(accessToken: string): Promise<DiscordGuild[]> {
+  let cachedRecord = null;
+  try {
+    const { getDb } = await import('@/lib/mongodb');
+    const db = await getDb();
+    cachedRecord = await db.collection('discord_guilds_cache').findOne({ accessToken });
+    if (cachedRecord) {
+      const age = Date.now() - new Date(cachedRecord.updatedAt).getTime();
+      if (age < 90 * 1000) { // 90 seconds cache TTL
+        console.log('[getDiscordUserGuilds] Serving user guilds from fresh MongoDB cache.');
+        return cachedRecord.guilds;
+      }
+    }
+  } catch (cacheErr) {
+    console.error('[getDiscordUserGuilds] Cache lookup error:', cacheErr);
+  }
+
   const res = await fetch(`${API_ENDPOINT}/users/@me/guilds`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
@@ -99,6 +115,12 @@ export async function getDiscordUserGuilds(accessToken: string): Promise<Discord
   });
 
   if (!res.ok) {
+    // If request fails (e.g. rate-limited 429), fall back to stale cache if it exists
+    if (cachedRecord) {
+      console.warn(`[getDiscordUserGuilds] Discord API failed (Status ${res.status}). Falling back to stale cache.`);
+      return cachedRecord.guilds;
+    }
+
     let errBody = '';
     try {
       errBody = await res.text();
@@ -109,7 +131,21 @@ export async function getDiscordUserGuilds(accessToken: string): Promise<Discord
     throw new Error(`Discord API returned status ${res.status}: ${errBody}`);
   }
 
-  return res.json();
+  const guilds = await res.json();
+
+  try {
+    const { getDb } = await import('@/lib/mongodb');
+    const db = await getDb();
+    await db.collection('discord_guilds_cache').updateOne(
+      { accessToken },
+      { $set: { accessToken, guilds, updatedAt: new Date() } },
+      { upsert: true }
+    );
+  } catch (cacheErr) {
+    console.error('[getDiscordUserGuilds] Cache write error:', cacheErr);
+  }
+
+  return guilds;
 }
 
 /**
