@@ -45,7 +45,7 @@ async function fetchFromOpenSea(contractAddress: string, network: string, apiKey
   }
 
   const traitsData = await traitsRes.json();
-  const rawTraits = traitsData.traits || {};
+  const rawTraits = traitsData.counts || traitsData.traits || {};
 
   // Transform rawTraits to Record<string, string[]> format
   const traits: Record<string, string[]> = {};
@@ -129,7 +129,7 @@ export async function GET(req: NextRequest) {
     console.error('[contract-traits] Cache lookup error:', dbErr);
   }
 
-  if (cachedRecord) {
+  if (cachedRecord && cachedRecord.traits && Object.keys(cachedRecord.traits).length > 0) {
     const cacheAgeMs = Date.now() - new Date(cachedRecord.updatedAt).getTime();
     const threeDaysMs = 3 * 24 * 60 * 60 * 1000;
     
