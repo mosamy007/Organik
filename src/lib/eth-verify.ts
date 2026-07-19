@@ -1,13 +1,33 @@
 import { ethers } from 'ethers';
 
-// Default RPC providers
-const DEFAULT_RPC_URLS: Record<string, string> = {
-  ethereum: 'https://cloudflare-eth.com',
-  sepolia: 'https://rpc.ankr.com/eth_sepolia',
-  polygon: 'https://polygon-rpc.com',
-  arbitrum: 'https://arb1.arbitrum.io/rpc',
-  optimism: 'https://mainnet.optimism.io',
-  base: 'https://mainnet.base.org',
+// Default robust RPC providers lists
+const DEFAULT_RPC_URLS: Record<string, string[]> = {
+  ethereum: [
+    'https://eth.llamarpc.com',
+    'https://cloudflare-eth.com',
+    'https://ethereum.publicnode.com',
+  ],
+  sepolia: [
+    'https://rpc.ankr.com/eth_sepolia',
+    'https://ethereum-sepolia-rpc.publicnode.com',
+  ],
+  polygon: [
+    'https://polygon-rpc.com',
+    'https://polygon.llamarpc.com',
+  ],
+  arbitrum: [
+    'https://arb1.arbitrum.io/rpc',
+    'https://arbitrum.llamarpc.com',
+  ],
+  optimism: [
+    'https://mainnet.optimism.io',
+    'https://optimism.llamarpc.com',
+  ],
+  base: [
+    'https://base.llamarpc.com',
+    'https://mainnet.base.org',
+    'https://base.meowrpc.com',
+  ],
 };
 
 // ABI definitions
@@ -81,7 +101,8 @@ export function getProvider(network: string): ethers.JsonRpcProvider {
   }
 
   if (!rpcUrl) {
-    rpcUrl = DEFAULT_RPC_URLS[network] || DEFAULT_RPC_URLS.ethereum;
+    const defaultList = DEFAULT_RPC_URLS[network] || DEFAULT_RPC_URLS.ethereum;
+    rpcUrl = defaultList[0];
   }
   return new ethers.JsonRpcProvider(rpcUrl);
 }
@@ -94,18 +115,66 @@ export async function getNftBalance(
   walletAddress: string,
   network = 'ethereum'
 ): Promise<number> {
-  try {
-    const cleanContract = contractAddress.trim().toLowerCase();
-    const cleanWallet = walletAddress.trim().toLowerCase();
-    const provider = getProvider(network);
-    const contract = new ethers.Contract(cleanContract, ERC721_ABI, provider);
-    const balance = await contract.balanceOf(cleanWallet);
-    return Number(balance);
-  } catch (err) {
-    console.error('Error checking ERC-721 balance, trying ERC-1155...', err);
-    // If it's ERC-1155, balanceOf requires tokenId. So we return 0 here and rely on token-based checks if ERC-721 fails.
-    return 0;
+  const cleanContract = contractAddress.trim().toLowerCase();
+  const cleanWallet = walletAddress.trim().toLowerCase();
+
+  // 1. Gather all potential RPC URLs to try in order of preference
+  let rpcUrls: string[] = [];
+
+  // Custom environment variable RPC
+  let envRpc = '';
+  if (network === 'ethereum') envRpc = process.env.ETH_RPC_URL || '';
+  else if (network === 'base') envRpc = process.env.BASE_RPC_URL || '';
+  else if (network === 'polygon') envRpc = process.env.POLYGON_RPC_URL || '';
+  else if (network === 'arbitrum') envRpc = process.env.ARBITRUM_RPC_URL || '';
+  else if (network === 'optimism') envRpc = process.env.OPTIMISM_RPC_URL || '';
+  else if (network === 'sepolia') envRpc = process.env.SEPOLIA_RPC_URL || '';
+
+  if (envRpc) {
+    rpcUrls.push(envRpc);
   }
+
+  // Alchemy Premium RPC fallback
+  if (process.env.ALCHEMY_API_KEY) {
+    const subdomains: Record<string, string> = {
+      ethereum: 'eth-mainnet',
+      sepolia: 'eth-sepolia',
+      polygon: 'polygon-mainnet',
+      arbitrum: 'arb-mainnet',
+      optimism: 'opt-mainnet',
+      base: 'base-mainnet',
+    };
+    const subdomain = subdomains[network];
+    if (subdomain) {
+      rpcUrls.push(`https://${subdomain}.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`);
+    }
+  }
+
+  // Public RPC lists
+  const defaultList = DEFAULT_RPC_URLS[network] || DEFAULT_RPC_URLS.ethereum;
+  rpcUrls = [...rpcUrls, ...defaultList];
+
+  // 2. Try RPCs sequentially
+  for (const rpcUrl of rpcUrls) {
+    try {
+      console.log(`[getNftBalance] Querying balance on ${network} via RPC: ${rpcUrl}`);
+      const provider = new ethers.JsonRpcProvider(rpcUrl);
+      const contract = new ethers.Contract(cleanContract, ERC721_ABI, provider);
+
+      // Enforce a quick 2.5 second timeout per RPC endpoint check to prevent hanging
+      const balance = await withTimeout(
+        contract.balanceOf(cleanWallet),
+        2500,
+        `Timeout checking balance on ${rpcUrl}`
+      );
+      return Number(balance);
+    } catch (err: any) {
+      console.warn(`[getNftBalance] RPC ${rpcUrl} failed or timed out: ${err.message}. Trying next fallback...`);
+    }
+  }
+
+  console.error(`[getNftBalance] All RPC providers failed for contract ${cleanContract} on network ${network}.`);
+  return 0;
 }
 
 /**
