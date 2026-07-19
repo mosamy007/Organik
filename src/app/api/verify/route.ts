@@ -28,7 +28,18 @@ export async function GET(req: NextRequest) {
   try {
     const db = await getDb();
     const rules = await db.collection('nft_rules').find({ guildId }).toArray();
-    return NextResponse.json({ rules });
+
+    // Fetch linked wallets for the user in this guild if authenticated
+    const session = getSession(req);
+    let linkedWallets: string[] = [];
+    if (session) {
+      const wallets = await db.collection('verified_wallets')
+        .find({ discordId: session.discordId, guildId })
+        .toArray();
+      linkedWallets = wallets.map(w => w.walletAddress);
+    }
+
+    return NextResponse.json({ rules, linkedWallets });
   } catch (err: any) {
     console.error('Error fetching verification rules:', err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
@@ -61,9 +72,9 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Missing discordId or guildId' }, { status: 400 });
       }
 
-      // 1. Check if user has a verified wallet registered
-      const walletRecord = await db.collection('verified_wallets').findOne({ discordId });
-      if (!walletRecord) {
+      // 1. Check if user has verified wallets registered
+      const walletRecords = await db.collection('verified_wallets').find({ discordId }).toArray();
+      if (walletRecords.length === 0) {
         return NextResponse.json({
           success: false,
           error: 'no_wallet_linked',
@@ -71,7 +82,8 @@ export async function POST(req: NextRequest) {
         });
       }
 
-      const walletAddress = walletRecord.walletAddress;
+      const walletAddresses = walletRecords.map(w => w.walletAddress.toLowerCase());
+      const qualifyingWallet = walletAddresses[0];
 
       // 2. Fetch all rules for this guild
       const rules = await db.collection('nft_rules').find({ guildId }).toArray();
@@ -86,51 +98,70 @@ export async function POST(req: NextRequest) {
       const results = [];
       let anyAssigned = false;
       let anyEligible = false;
+      let matchedWallet = qualifyingWallet;
 
       for (const rule of rules) {
         const { contractAddress, network, ruleType, minQuantity, traitType, traitValue, roleId } = rule;
         let isEligible = false;
+        let matchedWalletForThisRule = '';
 
         try {
           if (ruleType === 'quantity') {
-            const balance = await withTimeout(
-              getNftBalance(contractAddress, walletAddress, network),
-              8000,
-              'NFT balance check timed out.'
-            );
-            const threshold = minQuantity || 1;
-            isEligible = balance >= threshold;
-          } else if (ruleType === 'trait') {
-            // 1. Try OpenSea first
-            const hasOpenSeaKey = !!process.env.OPENSEA_API_KEY;
-            if (hasOpenSeaKey) {
-              try {
-                isEligible = await withTimeout(
-                  verifyTraitsViaOpenSea(contractAddress, walletAddress, traitType, traitValue, network),
-                  7000,
-                  'OpenSea verification timed out.'
-                );
-              } catch (osErr) {
-                console.error('OpenSea auto-verify error, falling back to Alchemy:', osErr);
+            let totalBalance = 0;
+            for (const addr of walletAddresses) {
+              const balance = await withTimeout(
+                getNftBalance(contractAddress, addr, network),
+                8000,
+                'NFT balance check timed out.'
+              );
+              totalBalance += balance;
+              if (balance > 0 && !matchedWalletForThisRule) {
+                matchedWalletForThisRule = addr;
               }
             }
+            const threshold = minQuantity || 1;
+            isEligible = totalBalance >= threshold;
+          } else if (ruleType === 'trait') {
+            for (const addr of walletAddresses) {
+              // 1. Try OpenSea first
+              const hasOpenSeaKey = !!process.env.OPENSEA_API_KEY;
+              if (hasOpenSeaKey) {
+                try {
+                  isEligible = await withTimeout(
+                    verifyTraitsViaOpenSea(contractAddress, addr, traitType, traitValue, network),
+                    7000,
+                    'OpenSea verification timed out.'
+                  );
+                } catch (osErr) {
+                  console.error('OpenSea auto-verify error, falling back to Alchemy:', osErr);
+                }
+              }
 
-            // 2. Fallback to Alchemy if not eligible and Alchemy key is present
-            if (!isEligible && process.env.ALCHEMY_API_KEY) {
-              try {
-                isEligible = await withTimeout(
-                  verifyTraitsViaAlchemy(contractAddress, walletAddress, traitType, traitValue, network),
-                  7000,
-                  'Alchemy verification timed out.'
-                );
-              } catch (alErr) {
-                console.error('Alchemy auto-verify error:', alErr);
+              // 2. Fallback to Alchemy if not eligible and Alchemy key is present
+              if (!isEligible && process.env.ALCHEMY_API_KEY) {
+                try {
+                  isEligible = await withTimeout(
+                    verifyTraitsViaAlchemy(contractAddress, addr, traitType, traitValue, network),
+                    7000,
+                    'Alchemy verification timed out.'
+                  );
+                } catch (alErr) {
+                  console.error('Alchemy auto-verify error:', alErr);
+                }
+              }
+
+              if (isEligible) {
+                matchedWalletForThisRule = addr;
+                break;
               }
             }
           }
 
           if (isEligible) {
             anyEligible = true;
+            if (matchedWalletForThisRule) {
+              matchedWallet = matchedWalletForThisRule;
+            }
             const assigned = await assignGuildRole(guildId, discordId, roleId);
             if (assigned) {
               anyAssigned = true;
@@ -144,7 +175,7 @@ export async function POST(req: NextRequest) {
                     discordId,
                     guildId,
                     roleId,
-                    walletAddress,
+                    walletAddress: matchedWalletForThisRule || qualifyingWallet,
                     contractAddress,
                     verifiedAt: new Date(),
                   },
@@ -161,10 +192,12 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      const displayWallet = walletAddresses.map(addr => `${addr.substring(0, 6)}...${addr.substring(38)}`).join(', ');
+
       if (anyAssigned) {
         return NextResponse.json({
           success: true,
-          walletAddress,
+          walletAddress: matchedWallet,
           message: 'Successfully verified holdings and updated your server roles!',
           results,
         });
@@ -172,7 +205,7 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           success: false,
           error: 'role_assignment_failed',
-          walletAddress,
+          walletAddress: matchedWallet,
           message: 'You hold the required NFTs, but the bot lacks permission to assign the role. Please ask server admins to move the "Organik Bot" role higher in Server Settings.',
           results,
         });
@@ -180,15 +213,35 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({
           success: false,
           error: 'not_eligible',
-          walletAddress,
-          message: `Holdings checked for wallet ${walletAddress.substring(0, 6)}...${walletAddress.substring(38)}, but you do not hold the required NFTs.`,
+          walletAddress: matchedWallet,
+          message: `Holdings checked for wallet(s) ${displayWallet}, but you do not hold the required NFTs.`,
           results,
         });
       }
     }
 
-    // Handle regular signature verification from the website
+    if (!session) {
+      return NextResponse.json({ error: 'Please log in with Discord first' }, { status: 401 });
+    }
+
     const { action, signature, message, walletAddress, guildId } = body;
+
+    if (action === 'disconnect_wallet') {
+      if (!walletAddress || !guildId) {
+        return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+      }
+
+      await db.collection('verified_wallets').deleteOne({
+        discordId: session.discordId,
+        guildId,
+        walletAddress: walletAddress.toLowerCase(),
+      });
+
+      return NextResponse.json({
+        success: true,
+        message: 'Wallet disconnected successfully.',
+      });
+    }
 
     if (action === 'link_wallet') {
       if (!signature || !message || !walletAddress || !guildId) {
@@ -211,12 +264,12 @@ export async function POST(req: NextRequest) {
 
       // 3. Save verification records in DB
       await db.collection('verified_wallets').updateOne(
-        { discordId: session.discordId, guildId },
+        { discordId: session.discordId, guildId, walletAddress: walletAddress.toLowerCase() },
         {
           $set: {
             discordId: session.discordId,
             guildId,
-            walletAddress,
+            walletAddress: walletAddress.toLowerCase(),
             verifiedAt: new Date(),
           },
         },
@@ -374,12 +427,12 @@ export async function POST(req: NextRequest) {
     );
 
     await db.collection('verified_wallets').updateOne(
-      { discordId: session.discordId, guildId },
+      { discordId: session.discordId, guildId, walletAddress: walletAddress.toLowerCase() },
       {
         $set: {
           discordId: session.discordId,
           guildId,
-          walletAddress,
+          walletAddress: walletAddress.toLowerCase(),
           verifiedAt: new Date(),
         },
       },

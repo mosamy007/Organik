@@ -45,6 +45,25 @@ if MONGODB_URI:
 else:
     print("[WARNING] MONGODB_URI is not set. Database commands will not function.")
 
+import secrets
+from datetime import datetime, timedelta
+
+def create_one_time_token(discord_id: str, username: str, avatar_url: str) -> str:
+    if db is not None:
+        try:
+            token = secrets.token_hex(16)
+            db["one_time_tokens"].insert_one({
+                "_id": token,
+                "discordId": discord_id,
+                "username": username,
+                "avatar": avatar_url,
+                "expiresAt": datetime.utcnow() + timedelta(minutes=10)
+            })
+            return token
+        except Exception as e:
+            print(f"[WARNING] Failed to create one-time token: {e}")
+    return ""
+
 import aiohttp
 
 # Setup Discord Bot
@@ -95,20 +114,31 @@ async def call_auto_verify(discord_id: str, guild_id: str):
 
 # UI views
 class VerifyLinkView(discord.ui.View):
-    def __init__(self, guild_id: str = None):
+    def __init__(self):
         super().__init__(timeout=None)
-        self.guild_id = guild_id
-        if guild_id:
-            verify_url = f"{get_app_url()}/verify?guildId={guild_id}"
-            self.add_item(
-                discord.ui.Button(
-                    label="Link New Wallet",
-                    url=verify_url,
-                    emoji="🔗",
-                    style=discord.ButtonStyle.link,
-                    row=0
-                )
-            )
+
+    @discord.ui.button(label="Link New Wallet", style=discord.ButtonStyle.secondary, emoji="🔗", custom_id="link_new_wallet_btn", row=0)
+    async def link_new_wallet(self, interaction: discord.Interaction, button: discord.ui.Button):
+        await interaction.response.defer(ephemeral=True)
+        
+        guild_id = str(interaction.guild_id)
+        user_id = str(interaction.user.id)
+        username = str(interaction.user.name)
+        avatar_url = interaction.user.display_avatar.url if interaction.user.display_avatar else ""
+        
+        token = create_one_time_token(user_id, username, avatar_url)
+        verify_url = f"{get_app_url()}/verify?guildId={guild_id}"
+        if token:
+            verify_url += f"&token={token}"
+            
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(label="Open Link Portal", url=verify_url, style=discord.ButtonStyle.link, emoji="🔓"))
+        
+        await interaction.followup.send(
+            content="🔐 **Personalized Verification Link**\nClick below to securely connect and link your wallet. This link is private to you and logs you in automatically.",
+            view=view,
+            ephemeral=True
+        )
 
     @discord.ui.button(label="Verify NFT Roles", style=discord.ButtonStyle.success, emoji="🔐", custom_id="auto_verify_btn", row=0)
     async def auto_verify(self, interaction: discord.Interaction, button: discord.ui.Button):
@@ -134,9 +164,12 @@ class VerifyLinkView(discord.ui.View):
             wallet_short = f"{wallet[:6]}...{wallet[-4:]}" if len(wallet) > 10 else wallet
             
             if err_type == "no_wallet_linked":
+                token = create_one_time_token(str(interaction.user.id), str(interaction.user.name), interaction.user.display_avatar.url if interaction.user.display_avatar else "")
                 verify_url = f"{get_app_url()}/verify?guildId={guild_id}"
+                if token:
+                    verify_url += f"&token={token}"
                 view = discord.ui.View()
-                view.add_item(discord.ui.Button(label="Link Wallet Now", url=verify_url, style=discord.ButtonStyle.link))
+                view.add_item(discord.ui.Button(label="Link Wallet Now", url=verify_url, style=discord.ButtonStyle.link, emoji="🔗"))
                 await loading_msg.delete()
                 await interaction.followup.send(
                     content="❌ **No Wallet Registered!**\nYou haven't linked an EVM wallet to your Discord account yet. Please click below to verify and link your wallet.",
@@ -159,13 +192,12 @@ class VerifyLinkView(discord.ui.View):
 class GiveawayLinkView(discord.ui.View):
     def __init__(self, giveaway_id: str, guild_id: str):
         super().__init__(timeout=None)
-        giveaway_url = f"{get_app_url()}/giveaways?id={giveaway_id}&guildId={guild_id}"
         self.add_item(
             discord.ui.Button(
                 label="Enter Giveaway",
-                url=giveaway_url,
+                style=discord.ButtonStyle.primary,
                 emoji="🎉",
-                style=discord.ButtonStyle.link
+                custom_id=f"enter_giveaway_{giveaway_id}_{guild_id}"
             )
         )
 
@@ -181,6 +213,40 @@ async def on_ready():
         print(f"[ERROR] Failed to sync slash commands: {e}")
     print(f"[READY] Organik Bot is active and logged in as: {bot.user}")
 
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    if interaction.data:
+        custom_id = interaction.data.get("custom_id", "")
+        if custom_id and custom_id.startswith("enter_giveaway_"):
+            try:
+                parts = custom_id.split("_")
+                if len(parts) >= 4:
+                    giveaway_id = parts[2]
+                    guild_id = parts[3]
+                    
+                    await interaction.response.defer(ephemeral=True)
+                    
+                    user_id = str(interaction.user.id)
+                    username = str(interaction.user.name)
+                    avatar_url = interaction.user.display_avatar.url if interaction.user.display_avatar else ""
+                    
+                    token = create_one_time_token(user_id, username, avatar_url)
+                    
+                    url = f"{get_app_url()}/giveaways?id={giveaway_id}&guildId={guild_id}"
+                    if token:
+                        url += f"&token={token}"
+                        
+                    view = discord.ui.View()
+                    view.add_item(discord.ui.Button(label="Open Giveaway Portal", url=url, style=discord.ButtonStyle.link, emoji="🔓"))
+                    
+                    await interaction.followup.send(
+                        content="🎉 **Giveaway Entry Link**\nClick below to participate in this giveaway. This link is private to you and logs you in automatically.",
+                        view=view,
+                        ephemeral=True
+                    )
+            except Exception as e:
+                print(f"[ERROR] on_interaction enter_giveaway failed: {e}")
+
 # /verify command - Send ephemeral verification button for user
 @bot.tree.command(name="verify", description="Get your NFT verification link")
 async def verify(interaction: discord.Interaction):
@@ -191,7 +257,7 @@ async def verify(interaction: discord.Interaction):
         )
         return
 
-    view = VerifyLinkView(str(interaction.guild_id))
+    view = VerifyLinkView()
     await interaction.response.send_message(
         content="🔐 Click the button below to connect your EVM wallet and verify your NFT holdings or traits to claim roles.",
         view=view,
@@ -229,7 +295,7 @@ async def verify_setup(interaction: discord.Interaction):
     embed.set_thumbnail(url=interaction.guild.icon.url if interaction.guild.icon else "https://cdn.discordapp.com/embed/avatars/0.png")
     embed.set_footer(text="Organik Concepts © 2026 • Secure Web3 Verification")
 
-    view = VerifyLinkView(str(interaction.guild_id))
+    view = VerifyLinkView()
     
     # Send message to channel
     await interaction.channel.send(embed=embed, view=view)

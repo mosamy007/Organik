@@ -24,6 +24,37 @@ export function DiscordAuthProvider({ children }: { children: ReactNode }) {
 
   const checkSession = async () => {
     try {
+      let token = null;
+      let searchParams = null;
+      if (typeof window !== 'undefined') {
+        searchParams = new URLSearchParams(window.location.search);
+        token = searchParams.get('token');
+      }
+
+      if (token && searchParams) {
+        setLoading(true);
+        const tokenRes = await fetch('/api/auth/token-login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token }),
+        });
+        if (tokenRes.ok) {
+          const tokenData = await tokenRes.json();
+          if (tokenData.success) {
+            setUser(tokenData.user);
+            
+            // Clean token from the URL search parameters
+            searchParams.delete('token');
+            const newSearch = searchParams.toString();
+            const newPath = window.location.pathname + (newSearch ? `?${newSearch}` : '');
+            window.history.replaceState(null, '', newPath);
+            
+            setLoading(false);
+            return;
+          }
+        }
+      }
+
       const res = await fetch('/api/auth/user');
       if (res.ok) {
         const data = await res.json();
