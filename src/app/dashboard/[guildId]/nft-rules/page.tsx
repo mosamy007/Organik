@@ -27,6 +27,12 @@ export default function NftRulesPage({ params }: PageProps) {
   const [traitType, setTraitType] = useState('');
   const [traitValue, setTraitValue] = useState('');
 
+  // Trait auto-fetching state
+  const [fetchedTraits, setFetchedTraits] = useState<Record<string, string[]>>({});
+  const [loadingTraits, setLoadingTraits] = useState(false);
+  const [isManualTraitInput, setIsManualTraitInput] = useState(false);
+  const [traitFetchError, setTraitFetchError] = useState('');
+
   // Channel & Verification Panel state
   const [channels, setChannels] = useState<any[]>([]);
   const [loadingChannels, setLoadingChannels] = useState(true);
@@ -107,6 +113,46 @@ export default function NftRulesPage({ params }: PageProps) {
     loadChannels();
   }, [guildId]);
 
+  const handleFetchTraits = async () => {
+    if (!contractAddress || !/^0x[a-fA-F0-9]{40}$/.test(contractAddress.trim())) {
+      setTraitFetchError('Please enter a valid EVM contract address first.');
+      return;
+    }
+
+    setLoadingTraits(true);
+    setTraitFetchError('');
+    try {
+      const res = await fetch(`/api/verify/contract-traits?guildId=${guildId}&contractAddress=${contractAddress.trim()}&network=${network}`);
+      const data = await res.json();
+      if (res.ok && data.success) {
+        setFetchedTraits(data.traits || {});
+        const traitKeys = Object.keys(data.traits || {});
+        if (traitKeys.length > 0) {
+          setTraitType(traitKeys[0]);
+          const firstKeyValues = data.traits[traitKeys[0]] || [];
+          if (firstKeyValues.length > 0) {
+            setTraitValue(firstKeyValues[0]);
+          } else {
+            setTraitValue('');
+          }
+          setIsManualTraitInput(false);
+        } else {
+          setTraitFetchError('No traits found in this contract metadata. Try manual input.');
+          setIsManualTraitInput(true);
+        }
+      } else {
+        setTraitFetchError(data.error || 'Failed to fetch traits.');
+        setIsManualTraitInput(true);
+      }
+    } catch (err: any) {
+      console.error('Fetch traits error:', err);
+      setTraitFetchError(err.message || 'An unexpected error occurred while fetching traits.');
+      setIsManualTraitInput(true);
+    } finally {
+      setLoadingTraits(false);
+    }
+  };
+
   const handleCreateRule = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -159,6 +205,9 @@ export default function NftRulesPage({ params }: PageProps) {
         setMinQuantity('1');
         setTraitType('');
         setTraitValue('');
+        setFetchedTraits({});
+        setIsManualTraitInput(false);
+        setTraitFetchError('');
         // Reload rules
         loadRules();
       } else {
@@ -286,7 +335,12 @@ export default function NftRulesPage({ params }: PageProps) {
                 className="form-input"
                 placeholder="e.g. 0xbc4ca0eda7647a8ab7c2061c2e118a18a936f13d"
                 value={contractAddress}
-                onChange={(e) => setContractAddress(e.target.value)}
+                onChange={(e) => {
+                  setContractAddress(e.target.value);
+                  setFetchedTraits({});
+                  setIsManualTraitInput(false);
+                  setTraitFetchError('');
+                }}
                 required
               />
             </div>
@@ -294,7 +348,16 @@ export default function NftRulesPage({ params }: PageProps) {
             <div style={styles.formRow}>
               <div className="form-group" style={{ flex: 1 }}>
                 <label className="form-label">Blockchain Network</label>
-                <select className="form-select" value={network} onChange={(e) => setNetwork(e.target.value)}>
+                <select
+                  className="form-select"
+                  value={network}
+                  onChange={(e) => {
+                    setNetwork(e.target.value);
+                    setFetchedTraits({});
+                    setIsManualTraitInput(false);
+                    setTraitFetchError('');
+                  }}
+                >
                   <option value="ethereum">Ethereum Mainnet</option>
                   <option value="base">Base</option>
                   <option value="polygon">Polygon</option>
@@ -359,29 +422,113 @@ export default function NftRulesPage({ params }: PageProps) {
             )}
 
             {ruleType === 'trait' && (
-              <div style={styles.formRow} className="animate-fade-in">
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label">Trait Type (Attribute Name)</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. Background"
-                    value={traitType}
-                    onChange={(e) => setTraitType(e.target.value)}
-                    required
-                  />
+              <div className="animate-fade-in" style={{ display: 'flex', flexDirection: 'column', gap: '14px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '12px' }}>
+                  <button
+                    type="button"
+                    onClick={handleFetchTraits}
+                    disabled={loadingTraits || !contractAddress}
+                    className="btn btn-secondary"
+                    style={{ fontSize: '0.85rem', padding: '6px 12px' }}
+                  >
+                    {loadingTraits ? (
+                      <span style={{ display: 'flex', alignItems: 'center' }}>
+                        <span className="spinner" style={{ width: '12px', height: '12px', marginRight: '6px' }}></span>
+                        Fetching Traits...
+                      </span>
+                    ) : (
+                      '🔍 Fetch Collection Traits'
+                    )}
+                  </button>
+
+                  {Object.keys(fetchedTraits).length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setIsManualTraitInput(!isManualTraitInput)}
+                      style={{
+                        background: 'transparent',
+                        border: 'none',
+                        color: 'var(--primary)',
+                        cursor: 'pointer',
+                        fontSize: '0.85rem',
+                        textDecoration: 'underline'
+                      }}
+                    >
+                      {isManualTraitInput ? '📋 Use Dropdowns' : '✏️ Use Manual Input'}
+                    </button>
+                  )}
                 </div>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label">Trait Value</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="e.g. Red"
-                    value={traitValue}
-                    onChange={(e) => setTraitValue(e.target.value)}
-                    required
-                  />
-                </div>
+
+                {traitFetchError && (
+                  <div style={{ ...styles.statusError, padding: '8px 12px', fontSize: '0.8rem' }}>
+                    <span>⚠️ {traitFetchError}</span>
+                  </div>
+                )}
+
+                {Object.keys(fetchedTraits).length > 0 && !isManualTraitInput ? (
+                  <div style={styles.formRow}>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label className="form-label">Trait Type (Attribute Name)</label>
+                      <select
+                        className="form-select"
+                        value={traitType}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setTraitType(val);
+                          const vals = fetchedTraits[val] || [];
+                          setTraitValue(vals.length > 0 ? vals[0] : '');
+                        }}
+                        required
+                      >
+                        {Object.keys(fetchedTraits).map((key) => (
+                          <option key={key} value={key}>
+                            {key}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label className="form-label">Trait Value</label>
+                      <select
+                        className="form-select"
+                        value={traitValue}
+                        onChange={(e) => setTraitValue(e.target.value)}
+                        required
+                      >
+                        {(fetchedTraits[traitType] || []).map((val) => (
+                          <option key={val} value={val}>
+                            {val}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                ) : (
+                  <div style={styles.formRow}>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label className="form-label">Trait Type (Attribute Name)</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. Background"
+                        value={traitType}
+                        onChange={(e) => setTraitType(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="form-group" style={{ flex: 1 }}>
+                      <label className="form-label">Trait Value</label>
+                      <input
+                        type="text"
+                        className="form-input"
+                        placeholder="e.g. Red"
+                        value={traitValue}
+                        onChange={(e) => setTraitValue(e.target.value)}
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
