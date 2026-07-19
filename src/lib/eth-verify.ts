@@ -64,6 +64,22 @@ export function getProvider(network: string): ethers.JsonRpcProvider {
   else if (network === 'optimism') rpcUrl = process.env.OPTIMISM_RPC_URL || '';
   else if (network === 'sepolia') rpcUrl = process.env.SEPOLIA_RPC_URL || '';
 
+  // Use global Alchemy API key to generate premium authenticated RPC URL if no specific env URL is set
+  if (!rpcUrl && process.env.ALCHEMY_API_KEY) {
+    const subdomains: Record<string, string> = {
+      ethereum: 'eth-mainnet',
+      sepolia: 'eth-sepolia',
+      polygon: 'polygon-mainnet',
+      arbitrum: 'arb-mainnet',
+      optimism: 'opt-mainnet',
+      base: 'base-mainnet',
+    };
+    const subdomain = subdomains[network];
+    if (subdomain) {
+      rpcUrl = `https://${subdomain}.g.alchemy.com/v2/${process.env.ALCHEMY_API_KEY}`;
+    }
+  }
+
   if (!rpcUrl) {
     rpcUrl = DEFAULT_RPC_URLS[network] || DEFAULT_RPC_URLS.ethereum;
   }
