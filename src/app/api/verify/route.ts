@@ -165,6 +165,7 @@ export async function POST(req: NextRequest) {
           walletAddress,
           message: 'Successfully verified holdings and updated your server roles!',
           results,
+          diagnostics: { version: 'v1.3.1', timestamp: new Date().toISOString() },
         });
       } else {
         return NextResponse.json({
@@ -173,6 +174,7 @@ export async function POST(req: NextRequest) {
           walletAddress,
           message: `Holdings checked for wallet ${walletAddress.substring(0, 6)}...${walletAddress.substring(38)}, but you do not hold the required NFTs.`,
           results,
+          diagnostics: { version: 'v1.3.1', timestamp: new Date().toISOString() },
         });
       }
     }
