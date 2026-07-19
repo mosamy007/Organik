@@ -23,6 +23,20 @@ export async function POST(req: NextRequest) {
     }
 
     const appUrl = `${new URL(req.url).origin}`;
+    
+    // Save to global settings in MongoDB
+    try {
+      const { getDb } = await import('@/lib/mongodb');
+      const db = await getDb();
+      await db.collection('system_settings').updateOne(
+        { _id: 'global_settings' as any },
+        { $set: { appUrl, updatedAt: new Date() } },
+        { upsert: true }
+      );
+    } catch (dbErr) {
+      console.error('Failed to save global appUrl settings:', dbErr);
+    }
+
     const verifyUrl = `${appUrl}/verify?guildId=${guildId}`;
 
     const embed: any = {

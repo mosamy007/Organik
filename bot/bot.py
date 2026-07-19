@@ -38,9 +38,21 @@ import aiohttp
 intents = discord.Intents.default()
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+# Helper to dynamically retrieve the Next.js app URL from MongoDB
+def get_app_url():
+    if db is not None:
+        try:
+            settings = db["system_settings"].find_one({"_id": "global_settings"})
+            if settings and settings.get("appUrl"):
+                url = settings.get("appUrl")
+                return url[:-1] if url.endswith("/") else url
+        except Exception as e:
+            print(f"⚠️ Error reading global_settings: {e}")
+    return APP_URL
+
 # API helper to call Next.js auto-verify endpoint
 async def call_auto_verify(discord_id: str, guild_id: str):
-    url = f"{APP_URL}/api/verify"
+    url = f"{get_app_url()}/api/verify"
     headers = {
         "Authorization": f"Bot {TOKEN}",
         "Content-Type": "application/json"
@@ -74,7 +86,7 @@ class VerifyLinkView(discord.ui.View):
         super().__init__(timeout=None)
         self.guild_id = guild_id
         if guild_id:
-            verify_url = f"{APP_URL}/verify?guildId={guild_id}"
+            verify_url = f"{get_app_url()}/verify?guildId={guild_id}"
             self.add_item(
                 discord.ui.Button(
                     label="Link New Wallet",
@@ -105,7 +117,7 @@ class VerifyLinkView(discord.ui.View):
             wallet_short = f"{wallet[:6]}...{wallet[-4:]}" if len(wallet) > 10 else wallet
             
             if err_type == "no_wallet_linked":
-                verify_url = f"{APP_URL}/verify?guildId={guild_id}"
+                verify_url = f"{get_app_url()}/verify?guildId={guild_id}"
                 view = discord.ui.View()
                 view.add_item(discord.ui.Button(label="Link Wallet Now", url=verify_url, style=discord.ButtonStyle.link))
                 await interaction.followup.send(
@@ -127,7 +139,7 @@ class VerifyLinkView(discord.ui.View):
 class GiveawayLinkView(discord.ui.View):
     def __init__(self, giveaway_id: str, guild_id: str):
         super().__init__(timeout=None)
-        giveaway_url = f"{APP_URL}/giveaways?id={giveaway_id}&guildId={guild_id}"
+        giveaway_url = f"{get_app_url()}/giveaways?id={giveaway_id}&guildId={guild_id}"
         self.add_item(
             discord.ui.Button(
                 label="Enter Giveaway",
