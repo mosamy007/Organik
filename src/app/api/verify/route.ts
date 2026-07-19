@@ -7,6 +7,8 @@ import {
   getNftBalance,
   verifySpecificTokenTraits,
   verifyTraitsViaAlchemy,
+  verifyTraitsViaOpenSea,
+  withTimeout,
 } from '@/lib/eth-verify';
 import { assignGuildRole } from '@/lib/discord-api';
 import { ObjectId } from 'mongodb';
@@ -90,19 +92,39 @@ export async function POST(req: NextRequest) {
 
         try {
           if (ruleType === 'quantity') {
-            const balance = await getNftBalance(contractAddress, walletAddress, network);
+            const balance = await withTimeout(
+              getNftBalance(contractAddress, walletAddress, network),
+              8000,
+              'NFT balance check timed out.'
+            );
             const threshold = minQuantity || 1;
             isEligible = balance >= threshold;
           } else if (ruleType === 'trait') {
-            const alchemyApiKey = process.env.ALCHEMY_API_KEY;
-            if (alchemyApiKey) {
-              isEligible = await verifyTraitsViaAlchemy(
-                contractAddress,
-                walletAddress,
-                traitType,
-                traitValue,
-                network
-              );
+            // 1. Try OpenSea first
+            const hasOpenSeaKey = !!process.env.OPENSEA_API_KEY;
+            if (hasOpenSeaKey) {
+              try {
+                isEligible = await withTimeout(
+                  verifyTraitsViaOpenSea(contractAddress, walletAddress, traitType, traitValue, network),
+                  7000,
+                  'OpenSea verification timed out.'
+                );
+              } catch (osErr) {
+                console.error('OpenSea auto-verify error, falling back to Alchemy:', osErr);
+              }
+            }
+
+            // 2. Fallback to Alchemy if not eligible and Alchemy key is present
+            if (!isEligible && process.env.ALCHEMY_API_KEY) {
+              try {
+                isEligible = await withTimeout(
+                  verifyTraitsViaAlchemy(contractAddress, walletAddress, traitType, traitValue, network),
+                  7000,
+                  'Alchemy verification timed out.'
+                );
+              } catch (alErr) {
+                console.error('Alchemy auto-verify error:', alErr);
+              }
             }
           }
 
@@ -156,8 +178,48 @@ export async function POST(req: NextRequest) {
     }
 
     // Handle regular signature verification from the website
-    const { signature, message, walletAddress, guildId, ruleId, tokenId } = body;
+    const { action, signature, message, walletAddress, guildId } = body;
 
+    if (action === 'link_wallet') {
+      if (!signature || !message || !walletAddress || !guildId) {
+        return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+      }
+
+      // 1. Validate cryptographic signature
+      const isValidSig = verifySignature(message, signature, walletAddress);
+      if (!isValidSig) {
+        return NextResponse.json({ error: 'Cryptographic signature verification failed' }, { status: 400 });
+      }
+
+      // 2. Ensure the message contains the user's actual Discord ID
+      if (!session || !message.includes(session.discordId)) {
+        return NextResponse.json(
+          { error: 'Signature security check failed: Message does not contain your Discord ID' },
+          { status: 400 }
+        );
+      }
+
+      // 3. Save verification records in DB
+      await db.collection('verified_wallets').updateOne(
+        { discordId: session.discordId, guildId },
+        {
+          $set: {
+            discordId: session.discordId,
+            guildId,
+            walletAddress,
+            verifiedAt: new Date(),
+          },
+        },
+        { upsert: true }
+      );
+
+      return NextResponse.json({
+        success: true,
+        message: 'Wallet linked successfully! You can now close this tab and return to Discord to click the green Verify button.',
+      });
+    }
+
+    const { ruleId, tokenId } = body;
     if (!signature || !message || !walletAddress || !guildId || !ruleId) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
     }
@@ -194,24 +256,50 @@ export async function POST(req: NextRequest) {
     let detailsMessage = '';
 
     if (ruleType === 'quantity') {
-      const balance = await getNftBalance(contractAddress, walletAddress, network);
+      const balance = await withTimeout(
+        getNftBalance(contractAddress, walletAddress, network),
+        8000,
+        'NFT balance check timed out.'
+      );
       const threshold = minQuantity || 1;
       isEligible = balance >= threshold;
       detailsMessage = `NFT balance checked: Found ${balance}. Required: ${threshold}+`;
     } else if (ruleType === 'trait') {
-      // Check via Alchemy first (automatic)
-      const alchemyApiKey = process.env.ALCHEMY_API_KEY;
-      if (alchemyApiKey) {
-        isEligible = await verifyTraitsViaAlchemy(
-          contractAddress,
-          walletAddress,
-          traitType,
-          traitValue,
-          network
-        );
-        detailsMessage = isEligible
-          ? 'Matching trait verified automatically via API.'
-          : 'No matching traits found automatically via API.';
+      // 1. Try OpenSea first
+      const hasOpenSeaKey = !!process.env.OPENSEA_API_KEY;
+      if (hasOpenSeaKey) {
+        try {
+          isEligible = await withTimeout(
+            verifyTraitsViaOpenSea(contractAddress, walletAddress, traitType, traitValue, network),
+            7000,
+            'OpenSea verification timed out.'
+          );
+          if (isEligible) {
+            detailsMessage = 'Matching trait verified automatically via OpenSea API.';
+          }
+        } catch (osErr) {
+          console.error('OpenSea web-verify error:', osErr);
+        }
+      }
+
+      // 2. Fallback to Alchemy if not eligible and Alchemy key is present
+      if (!isEligible && process.env.ALCHEMY_API_KEY) {
+        try {
+          isEligible = await withTimeout(
+            verifyTraitsViaAlchemy(contractAddress, walletAddress, traitType, traitValue, network),
+            7000,
+            'Alchemy verification timed out.'
+          );
+          if (isEligible) {
+            detailsMessage = 'Matching trait verified automatically via Alchemy API.';
+          }
+        } catch (alErr) {
+          console.error('Alchemy web-verify error:', alErr);
+        }
+      }
+
+      if (!isEligible) {
+        detailsMessage = 'No matching traits found automatically via API.';
       }
 
       // If not verified via Alchemy and user provided a specific Token ID, try manual on-chain verification
@@ -229,7 +317,7 @@ export async function POST(req: NextRequest) {
       }
 
       // If still not verified and no token ID was provided, ask the user to provide one
-      if (!isEligible && !tokenId && !alchemyApiKey) {
+      if (!isEligible && !tokenId && !process.env.ALCHEMY_API_KEY) {
         return NextResponse.json(
           {
             error: 'Trait verification requires a Token ID. Please input a Token ID you own to proceed with verification.',

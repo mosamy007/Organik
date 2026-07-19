@@ -2,6 +2,31 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { ethers } from 'ethers';
+import { EthersAdapter } from '@reown/appkit-adapter-ethers';
+import { mainnet, base, polygon, arbitrum, optimism } from '@reown/appkit/networks';
+import { createAppKit, useAppKitAccount, useAppKitProvider, useDisconnect, useAppKit } from '@reown/appkit/react';
+
+const projectId = '0ca551c7155e1a102ed9c2acdd2fede4';
+
+const metadata = {
+  name: 'Organik Bot',
+  description: 'Web3 role verification and giveaways dashboard for Discord',
+  url: typeof window !== 'undefined' ? window.location.origin : 'https://organik-zeta.vercel.app',
+  icons: ['https://organik-zeta.vercel.app/favicon.ico'],
+};
+
+// Initialize AppKit on the client only
+if (typeof window !== 'undefined') {
+  createAppKit({
+    adapters: [new EthersAdapter()],
+    networks: [mainnet, base, polygon, arbitrum, optimism],
+    metadata,
+    projectId,
+    features: {
+      analytics: false,
+    },
+  });
+}
 
 interface WalletContextType {
   walletAddress: string | null;
@@ -15,74 +40,24 @@ interface WalletContextType {
 
 const WalletContext = createContext<WalletContextType | undefined>(undefined);
 
-export function WalletProvider({ children }: { children: ReactNode }) {
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
-  const [isConnected, setIsConnected] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
+function WalletProviderClient({ children }: { children: ReactNode }) {
+  const { address, isConnected } = useAppKitAccount();
+  const { walletProvider } = useAppKitProvider('eip155');
+  const { open } = useAppKit();
+  const { disconnect } = useDisconnect();
+
   const [error, setError] = useState<string | null>(null);
-
-  // Check if wallet is already connected on mount
-  useEffect(() => {
-    const checkIfWalletIsConnected = async () => {
-      if (typeof window !== 'undefined' && (window as any).ethereum) {
-        try {
-          const provider = new ethers.BrowserProvider((window as any).ethereum);
-          const accounts = await provider.listAccounts();
-          if (accounts.length > 0) {
-            setWalletAddress(accounts[0].address);
-            setIsConnected(true);
-          }
-        } catch (err) {
-          console.error('Error listing accounts:', err);
-        }
-      }
-    };
-    checkIfWalletIsConnected();
-
-    // Listen for account/network changes
-    if (typeof window !== 'undefined' && (window as any).ethereum) {
-      const handleAccountsChanged = (accounts: string[]) => {
-        if (accounts.length > 0) {
-          setWalletAddress(accounts[0]);
-          setIsConnected(true);
-        } else {
-          setWalletAddress(null);
-          setIsConnected(false);
-        }
-      };
-
-      (window as any).ethereum.on('accountsChanged', handleAccountsChanged);
-      return () => {
-        if ((window as any).ethereum?.removeListener) {
-          (window as any).ethereum.removeListener('accountsChanged', handleAccountsChanged);
-        }
-      };
-    }
-  }, []);
+  const [isConnecting, setIsConnecting] = useState(false);
 
   const connectWallet = async (): Promise<string | null> => {
     setError(null);
     setIsConnecting(true);
-
-    if (typeof window === 'undefined' || !(window as any).ethereum) {
-      setError('No Ethereum wallet detected. Please install MetaMask or Coinbase Wallet.');
-      setIsConnecting(false);
-      return null;
-    }
-
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
-      const accounts = await provider.send('eth_requestAccounts', []);
-      if (accounts.length > 0) {
-        setWalletAddress(accounts[0]);
-        setIsConnected(true);
-        setIsConnecting(false);
-        return accounts[0];
-      }
+      await open({ view: 'Connect' });
       setIsConnecting(false);
-      return null;
+      return address || null;
     } catch (err: any) {
-      console.error('Error connecting wallet:', err);
+      console.error('Error opening AppKit connect:', err);
       setError(err.message || 'Failed to connect wallet');
       setIsConnecting(false);
       return null;
@@ -90,20 +65,23 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   };
 
   const disconnectWallet = () => {
-    setWalletAddress(null);
-    setIsConnected(false);
     setError(null);
+    try {
+      disconnect();
+    } catch (err) {
+      console.error('Error disconnecting:', err);
+    }
   };
 
   const signMessage = async (message: string): Promise<string | null> => {
     setError(null);
-    if (typeof window === 'undefined' || !(window as any).ethereum || !walletAddress) {
+    if (!isConnected || !walletProvider) {
       setError('Wallet not connected.');
       return null;
     }
 
     try {
-      const provider = new ethers.BrowserProvider((window as any).ethereum);
+      const provider = new ethers.BrowserProvider(walletProvider as any);
       const signer = await provider.getSigner();
       const signature = await signer.signMessage(message);
       return signature;
@@ -117,8 +95,8 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   return (
     <WalletContext.Provider
       value={{
-        walletAddress,
-        isConnected,
+        walletAddress: address || null,
+        isConnected: !!isConnected,
         isConnecting,
         error,
         connectWallet,
@@ -131,10 +109,48 @@ export function WalletProvider({ children }: { children: ReactNode }) {
   );
 }
 
+export function WalletProvider({ children }: { children: ReactNode }) {
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
+
+  if (!mounted) {
+    // Return mock provider during SSR / pre-hydration
+    return (
+      <WalletContext.Provider
+        value={{
+          walletAddress: null,
+          isConnected: false,
+          isConnecting: false,
+          error: null,
+          connectWallet: async () => null,
+          disconnectWallet: () => {},
+          signMessage: async () => null,
+        }}
+      >
+        {children}
+      </WalletContext.Provider>
+    );
+  }
+
+  return <WalletProviderClient>{children}</WalletProviderClient>;
+}
+
 export function useWallet() {
   const context = useContext(WalletContext);
   if (context === undefined) {
-    throw new Error('useWallet must be used within a WalletProvider');
+    // Safe fallback for SSR if called outside context
+    return {
+      walletAddress: null,
+      isConnected: false,
+      isConnecting: false,
+      error: null,
+      connectWallet: async () => null,
+      disconnectWallet: () => {},
+      signMessage: async () => null,
+    };
   }
   return context;
 }

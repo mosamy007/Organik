@@ -233,3 +233,102 @@ export async function verifyTraitsViaAlchemy(
     return false;
   }
 }
+
+/**
+ * Automates NFT trait checking using OpenSea's NFT API.
+ * Returns true if the user owns any NFT in the contract that matches the rules.
+ */
+export async function verifyTraitsViaOpenSea(
+  contractAddress: string,
+  walletAddress: string,
+  traitType: string,
+  traitValue: string,
+  network = 'ethereum'
+): Promise<boolean> {
+  const apiKey = process.env.OPENSEA_API_KEY;
+  if (!apiKey) return false;
+
+  const OPENSEA_CHAINS: Record<string, string> = {
+    ethereum: 'ethereum',
+    sepolia: 'sepolia',
+    polygon: 'polygon',
+    arbitrum: 'arbitrum',
+    optimism: 'optimism',
+    base: 'base',
+  };
+
+  const chain = OPENSEA_CHAINS[network];
+  if (!chain) return false;
+
+  const url = `https://api.opensea.io/api/v2/chain/${chain}/account/${walletAddress}/nfts`;
+
+  try {
+    let nextToken = '';
+    let pageCount = 0;
+
+    do {
+      let pageUrl = url;
+      if (nextToken) {
+        pageUrl += `?next=${nextToken}`;
+      }
+
+      const res = await fetch(pageUrl, {
+        headers: {
+          'x-api-key': apiKey,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!res.ok) {
+        console.error(`OpenSea owned NFTs status: ${res.status}`);
+        break;
+      }
+
+      const data = await res.json();
+      const nfts = data.nfts || [];
+
+      for (const nft of nfts) {
+        if (nft.contract?.toLowerCase() === contractAddress.toLowerCase()) {
+          const metadata = nft.metadata || {};
+          const attributes = metadata.attributes || metadata.traits || nft.traits || [];
+          const hasTrait = attributes.some((attr: any) => {
+            const currentType = attr.trait_type || attr.name || '';
+            const currentValue = attr.value || '';
+            return (
+              currentType.toString().trim().toLowerCase() === traitType.trim().toLowerCase() &&
+              currentValue.toString().trim().toLowerCase() === traitValue.trim().toLowerCase()
+            );
+          });
+
+          if (hasTrait) {
+            return true;
+          }
+        }
+      }
+
+      nextToken = data.next || '';
+      pageCount++;
+    } while (nextToken && pageCount < 4);
+
+    return false;
+  } catch (err) {
+    console.error('OpenSea owned NFTs verification error:', err);
+    return false;
+  }
+}
+
+/**
+ * Helper to wrap any Promise with a timeout.
+ */
+export function withTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs = 8000,
+  errorMsg = 'Request timed out'
+): Promise<T> {
+  return Promise.race([
+    promise,
+    new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error(errorMsg)), timeoutMs)
+    ),
+  ]);
+}

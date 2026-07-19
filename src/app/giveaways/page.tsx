@@ -4,7 +4,7 @@ import React, { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { useDiscordAuth } from '@/components/DiscordAuthProvider';
 import { useWallet } from '@/components/WalletProvider';
-import { Gift, Clock, Users, ShieldAlert, CheckCircle, ExternalLink, Calendar, ArrowLeft } from 'lucide-react';
+import { Gift, Clock, Users, ShieldAlert, CheckCircle, ExternalLink, Calendar, ArrowLeft, Disc, Wallet } from 'lucide-react';
 import Link from 'next/link';
 
 function GiveawaysContent() {
@@ -168,26 +168,27 @@ function GiveawaysContent() {
     return `${minutes}m remaining`;
   };
 
-  // Render Single Giveaway Detail
+  // Render Single Giveaway Detail (Portal View)
   if (giveawayId) {
     if (loadingDetail) {
       return (
-        <div style={styles.loadingCenter}>
-          <div className="spinner"></div>
-          <span>Loading giveaway details...</span>
+        <div style={styles.pageWrapper}>
+          <div style={styles.loadingCenter}>
+            <div className="spinner"></div>
+            <span>Loading giveaway details...</span>
+          </div>
         </div>
       );
     }
 
     if (!giveaway) {
       return (
-        <div style={styles.errorCenter}>
-          <ShieldAlert size={48} color="var(--error)" />
-          <h2>Giveaway Not Found</h2>
-          <p>Please double check the URL or return to the portal.</p>
-          <Link href="/giveaways" className="btn btn-secondary" style={{ marginTop: '20px' }}>
-            <ArrowLeft size={16} /> Return to Portal
-          </Link>
+        <div style={styles.pageWrapper}>
+          <div style={styles.errorCenter}>
+            <ShieldAlert size={48} color="var(--error)" />
+            <h2>Giveaway Not Found</h2>
+            <p>Please double check the URL or request a new link in Discord.</p>
+          </div>
         </div>
       );
     }
@@ -195,258 +196,256 @@ function GiveawaysContent() {
     const isEnded = giveaway.status === 'ended' || new Date() > new Date(giveaway.endTime);
 
     return (
-      <div style={styles.container} className="animate-fade-in">
-        <div style={{ alignSelf: 'flex-start' }}>
-          <Link href={guildIdFromQuery ? `/giveaways?guildId=${guildIdFromQuery}` : '/giveaways'} style={styles.backLink}>
-            <ArrowLeft size={16} /> Back to giveaways
-          </Link>
-        </div>
+      <div style={styles.pageWrapper}>
+        <div style={styles.portalCard} className="glass-card animate-fade-in">
+          {/* Header */}
+          <div style={styles.header}>
+            <div style={styles.logoBadge}>
+              <Gift size={32} color="var(--primary)" />
+            </div>
+            <span style={isEnded ? styles.statusBadgeEnded : styles.statusBadgeActive}>
+              {isEnded ? 'Ended' : 'Active Giveaway'}
+            </span>
+            <h1 style={styles.title}>{giveaway.prize}</h1>
+            <p style={styles.subtitle}>{giveaway.description}</p>
+          </div>
 
-        <div style={styles.giveawayWrapper}>
-          {/* Main Info Card */}
-          <div className="glass-card" style={styles.mainCard}>
-            <div style={styles.giveawayHeader}>
-              <span style={isEnded ? styles.statusBadgeEnded : styles.statusBadgeActive}>
-                {isEnded ? 'Ended' : 'Active'}
+          {/* Stats Bar */}
+          <div style={styles.metaRow}>
+            <div style={styles.metaCol}>
+              <Clock size={15} color="var(--text-muted)" />
+              <span>
+                {isEnded 
+                  ? `Ended on ${new Date(giveaway.endTime).toLocaleDateString()}` 
+                  : formatTimeRemaining(giveaway.endTime)}
               </span>
-              <h1 style={styles.giveawayTitle}>{giveaway.prize}</h1>
-              <p style={styles.giveawayDesc}>{giveaway.description}</p>
             </div>
+            <div style={styles.metaCol}>
+              <Users size={15} color="var(--text-muted)" />
+              <span>{totalEntries} Entered</span>
+            </div>
+            <div style={styles.metaCol}>
+              <Gift size={15} color="var(--text-muted)" />
+              <span>{giveaway.winnerCount} Winner(s)</span>
+            </div>
+          </div>
 
-            <div style={styles.metaRow}>
-              <div style={styles.metaCol}>
-                <Clock size={16} color="var(--text-muted)" />
-                <span>
-                  {isEnded 
-                    ? `Ended on ${new Date(giveaway.endTime).toLocaleDateString()}` 
-                    : formatTimeRemaining(giveaway.endTime)}
-                </span>
-              </div>
-              <div style={styles.metaCol}>
-                <Users size={16} color="var(--text-muted)" />
-                <span>{totalEntries} participants</span>
-              </div>
-              <div style={styles.metaCol}>
-                <Gift size={16} color="var(--text-muted)" />
-                <span>{giveaway.winnerCount} Winner(s)</span>
+          {/* Winners Announcement */}
+          {isEnded && giveaway.winners && giveaway.winners.length > 0 && (
+            <div style={styles.winnersBox}>
+              <h3 style={{ fontSize: '0.95rem', fontWeight: '700', color: '#fbbf24', marginBottom: '8px' }}>
+                🎉 Winners Drawn 🎉
+              </h3>
+              <div style={styles.winnersList}>
+                {giveaway.winners.map((winnerId: string, index: number) => (
+                  <span key={winnerId} style={styles.winnerItem}>
+                    🏆 Winner #{index + 1}: <code style={styles.code}>&lt;@{winnerId}&gt;</code>
+                  </span>
+                ))}
               </div>
             </div>
+          )}
 
-            {/* Winners Announcement */}
-            {isEnded && giveaway.winners && giveaway.winners.length > 0 && (
-              <div style={styles.winnersBox}>
-                <h3 style={{ fontSize: '1rem', fontWeight: '700', color: '#fbbf24', marginBottom: '8px' }}>
-                  🎉 Winners 🎉
-                </h3>
-                <div style={styles.winnersList}>
-                  {giveaway.winners.map((winnerId: string, index: number) => (
-                    <span key={winnerId} style={styles.winnerItem}>
-                      🏆 Winner #{index + 1}: <code style={styles.code}>&lt;@{winnerId}&gt;</code>
-                    </span>
-                  ))}
+          {/* Tasks list */}
+          {!isEnded && (
+            <div style={styles.entrySection}>
+              <h3 style={{ fontSize: '1rem', fontWeight: '700', marginBottom: '8px' }}>Required Tasks</h3>
+
+              {/* Discord Login Task */}
+              {!user ? (
+                <div style={styles.taskItemPending}>
+                  <div style={styles.taskDetails}>
+                    <span style={styles.taskLabel}>Discord Authentication *</span>
+                    <span style={styles.taskSub}>Authenticate your account to log entry.</span>
+                  </div>
+                  <button
+                    onClick={() => discordLogin(`/giveaways?id=${giveawayId}`)}
+                    style={styles.discordButton}
+                  >
+                    Login Discord
+                  </button>
                 </div>
-              </div>
-            )}
-
-            {/* Entry Form */}
-            {!isEnded && (
-              <div style={styles.entrySection}>
-                <h2 style={{ fontSize: '1.25rem', marginBottom: '16px' }}>Complete Tasks to Enter</h2>
-
-                {/* Step 1: Discord Check */}
-                {!user ? (
-                  <div style={styles.taskItemPending}>
-                    <div style={styles.taskDetails}>
-                      <strong>Step 1: Authenticate Discord</strong>
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>You must link Discord to log entry.</span>
-                    </div>
-                    <button onClick={() => discordLogin(`/giveaways?id=${giveawayId}`)} className="btn btn-discord" style={{ padding: '8px 16px', fontSize: '0.8rem' }}>
-                      Login Discord
-                    </button>
+              ) : (
+                <div style={styles.taskItemSuccess}>
+                  <div style={styles.taskDetails}>
+                    <span style={styles.taskLabelSuccess}>✓ Discord Connected</span>
+                    <span style={styles.taskSubSuccess}>Authenticated as {user.username}</span>
                   </div>
-                ) : (
-                  <div style={styles.taskItemSuccess}>
-                    <div style={styles.taskDetails}>
-                      <strong>✓ Discord Authenticated</strong>
-                      <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>Logged in as {user.username}</span>
-                    </div>
+                  <div style={styles.pillSuccessSmall}>
+                    <Disc size={12} />
+                    <span>Active</span>
                   </div>
-                )}
+                </div>
+              )}
 
-                {/* Tasks loop */}
-                {giveaway.tasks?.map((task: any) => {
-                  const isCompleted = tasksCompleted[task.id] === true;
+              {/* Dynamic tasks */}
+              {giveaway.tasks?.map((task: any) => {
+                const isCompleted = tasksCompleted[task.id] === true;
 
-                  if (task.type === 'wallet_input') {
-                    return (
-                      <div key={task.id} style={isCompleted || localWalletInput ? styles.taskItemSuccess : styles.taskItemPending}>
-                        <div style={styles.taskDetails}>
-                          <strong>EVM Wallet Address Submission {task.required && '*'}</strong>
-                          <span style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>Submit wallet for reward distribution.</span>
-                          
-                          {/* Wallet input field */}
-                          <div style={{ marginTop: '10px', display: 'flex', gap: '10px', width: '100%' }}>
-                            <input
-                              type="text"
-                              className="form-input"
-                              placeholder="0x..."
-                              value={localWalletInput}
-                              onChange={(e) => {
-                                setLocalWalletInput(e.target.value);
-                                handleTaskComplete(task.id, /^0x[a-fA-F0-9]{40}$/.test(e.target.value));
-                              }}
-                              disabled={hasEntered}
-                              style={{ flexGrow: 1 }}
-                            />
-                            {!isConnected && !hasEntered && (
-                              <button onClick={connectWallet} className="btn btn-secondary" style={{ padding: '8px 16px', fontSize: '0.8rem' }}>
-                                Connect Wallet
-                              </button>
-                            )}
-                          </div>
+                if (task.type === 'wallet_input') {
+                  return (
+                    <div
+                      key={task.id}
+                      style={isCompleted || localWalletInput ? styles.taskItemSuccess : styles.taskItemPending}
+                    >
+                      <div style={styles.taskDetails}>
+                        <span style={isCompleted || localWalletInput ? styles.taskLabelSuccess : styles.taskLabel}>
+                          Ethereum Wallet Submission {task.required && '*'}
+                        </span>
+                        <span style={isCompleted || localWalletInput ? styles.taskSubSuccess : styles.taskSub}>
+                          Provide wallet for NFT/role rewards.
+                        </span>
+                        <div style={{ marginTop: '12px', display: 'flex', gap: '8px', width: '100%' }}>
+                          <input
+                            type="text"
+                            placeholder="0x..."
+                            value={localWalletInput}
+                            onChange={(e) => {
+                              setLocalWalletInput(e.target.value);
+                              handleTaskComplete(task.id, /^0x[a-fA-F0-9]{40}$/.test(e.target.value));
+                            }}
+                            disabled={hasEntered}
+                            style={styles.taskInput}
+                          />
+                          {!isConnected && !hasEntered && (
+                            <button onClick={connectWallet} style={styles.taskWalletConnectBtn}>
+                              Connect
+                            </button>
+                          )}
                         </div>
                       </div>
-                    );
-                  }
-
-                  // Social/Link tasks
-                  return (
-                    <div key={task.id} style={isCompleted ? styles.taskItemSuccess : styles.taskItemPending}>
-                      <div style={styles.taskDetails}>
-                        <strong>{task.label} {task.required && '*'}</strong>
-                        {task.url && (
-                          <a href={task.url} target="_blank" rel="noopener noreferrer" style={styles.taskLink} onClick={() => handleTaskComplete(task.id, true)}>
-                            Open Action Link <ExternalLink size={12} />
-                          </a>
-                        )}
-                      </div>
-                      
-                      {!hasEntered && (
-                        <button
-                          onClick={() => handleTaskComplete(task.id, !isCompleted)}
-                          className={isCompleted ? "btn btn-secondary" : "btn btn-primary"}
-                          style={{ padding: '8px 16px', fontSize: '0.8rem' }}
-                        >
-                          {isCompleted ? 'Completed' : 'Verify'}
-                        </button>
-                      )}
                     </div>
                   );
-                })}
+                }
 
-                {/* Final Enter Action */}
-                {hasEntered ? (
-                  <div style={styles.joinedSuccessBanner}>
-                    <CheckCircle size={20} color="var(--success)" />
-                    <span>You have already entered this giveaway! Stay tuned for the drawing.</span>
-                  </div>
-                ) : (
-                  <div style={{ marginTop: '30px' }}>
-                    <button
-                      onClick={handleEnterGiveaway}
-                      disabled={!user || submitStatus === 'loading'}
-                      className="btn btn-primary"
-                      style={{ width: '100%', padding: '14px' }}
-                    >
-                      {submitStatus === 'loading' ? (
-                        <>
-                          <div className="spinner" style={{ width: '16px', height: '16px' }}></div> Joining...
-                        </>
-                      ) : (
-                        'Submit Entry & Enter Giveaway'
+                return (
+                  <div key={task.id} style={isCompleted ? styles.taskItemSuccess : styles.taskItemPending}>
+                    <div style={styles.taskDetails}>
+                      <span style={isCompleted ? styles.taskLabelSuccess : styles.taskLabel}>
+                        {task.label} {task.required && '*'}
+                      </span>
+                      {task.url && (
+                        <a
+                          href={task.url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          style={styles.taskLink}
+                          onClick={() => handleTaskComplete(task.id, true)}
+                        >
+                          Open external link <ExternalLink size={12} />
+                        </a>
                       )}
-                    </button>
-                    {submitStatus === 'error' && (
-                      <div style={styles.errorText}>{submitMessage}</div>
+                    </div>
+                    {!hasEntered && (
+                      <button
+                        onClick={() => handleTaskComplete(task.id, !isCompleted)}
+                        style={isCompleted ? styles.taskBtnCompleted : styles.taskBtnAction}
+                      >
+                        {isCompleted ? 'Done' : 'Verify'}
+                      </button>
                     )}
                   </div>
-                )}
-              </div>
-            )}
-          </div>
+                );
+              })}
+
+              {/* Action and Status Banners */}
+              {hasEntered ? (
+                <div style={styles.joinedSuccessBanner} className="animate-scale-in">
+                  <CheckCircle size={20} color="var(--success)" />
+                  <span>Entry Logged Successfully! You can now close this tab.</span>
+                </div>
+              ) : (
+                <div style={{ marginTop: '10px' }}>
+                  <button
+                    onClick={handleEnterGiveaway}
+                    disabled={!user || submitStatus === 'loading'}
+                    style={styles.mainCtaBtn}
+                  >
+                    {submitStatus === 'loading' ? (
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'center' }}>
+                        <div className="spinner" style={{ width: '16px', height: '16px' }}></div>
+                        Submitting...
+                      </div>
+                    ) : (
+                      'Join Giveaway'
+                    )}
+                  </button>
+                  {submitStatus === 'error' && <div style={styles.errorText}>{submitMessage}</div>}
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     );
   }
 
-  // Render Giveaways List for a server
+  // Fallback List View (Sleek card listing all giveaways)
   return (
-    <div style={styles.container} className="animate-fade-in">
-      <div style={styles.header}>
-        <div style={styles.iconCircle}>
-          <Gift size={36} color="var(--primary)" />
+    <div style={styles.pageWrapper}>
+      <div style={styles.portalCard} className="glass-card animate-fade-in">
+        <div style={styles.header}>
+          <div style={styles.logoBadge}>
+            <Gift size={32} color="var(--primary)" />
+          </div>
+          <h1 style={styles.title}>Giveaway Portal</h1>
+          <p style={styles.subtitle}>Browse active giveaways for your server.</p>
         </div>
-        <h1 style={styles.title}>Giveaway Portal</h1>
-        <p style={styles.subtitle}>
-          Browse active giveaways, complete community tasks, and win roles and NFT rewards.
-        </p>
-      </div>
 
-      <div style={styles.listLayout}>
-        <div className="glass-card" style={{ padding: '24px', width: '100%', maxWidth: '600px', margin: '0 auto' }}>
-          <div className="form-group">
-            <label className="form-label">Enter Discord Server ID (Guild ID)</label>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+          <div style={styles.formGroup}>
+            <label style={styles.label}>Discord Server ID (Guild ID)</label>
             <input
               type="text"
-              className="form-input"
               placeholder="e.g. 1524220657720885339"
               value={guildId}
               onChange={(e) => setGuildId(e.target.value)}
               disabled={!!guildIdFromQuery}
+              style={styles.taskInput}
             />
           </div>
-        </div>
 
-        {guildId && (
-          <div style={styles.resultsWrapper}>
-            {loadingList ? (
-              <div style={styles.loadingCenter}>
-                <div className="spinner"></div>
-                <span>Loading giveaways...</span>
-              </div>
-            ) : giveaways.length > 0 ? (
-              <div style={styles.giveawayGrid}>
-                {giveaways.map((gw) => {
+          {guildId && (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px', marginTop: '10px' }}>
+              {loadingList ? (
+                <div style={styles.loadingCenter}>
+                  <div className="spinner"></div>
+                  <span>Fetching giveaways...</span>
+                </div>
+              ) : giveaways.length > 0 ? (
+                giveaways.map((gw) => {
                   const isGwEnded = gw.status === 'ended' || new Date() > new Date(gw.endTime);
                   return (
-                    <div key={gw._id} className="glass-card" style={styles.giveawayCard}>
-                      <div style={styles.cardHeader}>
+                    <div key={gw._id} style={styles.listItem}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <span style={isGwEnded ? styles.statusBadgeEnded : styles.statusBadgeActive}>
                           {isGwEnded ? 'Ended' : 'Active'}
                         </span>
-                        <span style={styles.entriesBadge}>
-                          <Users size={12} /> {gw.winnerCount} Winner(s)
+                        <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
+                          {gw.winnerCount} Winner(s)
                         </span>
                       </div>
-
-                      <h3 style={styles.cardTitle}>{gw.prize}</h3>
-                      <p style={styles.cardDesc}>{gw.description}</p>
-
-                      <div style={styles.cardMeta}>
-                        <Clock size={14} color="var(--text-muted)" />
-                        <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)' }}>
-                          {isGwEnded 
-                            ? 'Ended' 
-                            : formatTimeRemaining(gw.endTime)}
-                        </span>
-                      </div>
-
-                      <Link href={`/giveaways?id=${gw._id}${guildIdFromQuery ? `&guildId=${guildIdFromQuery}` : ''}`} className="btn btn-secondary" style={{ marginTop: '15px' }}>
-                        View Details
+                      <h4 style={{ fontSize: '1rem', fontWeight: '750', margin: '6px 0' }}>{gw.prize}</h4>
+                      <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)', marginBottom: '12px' }}>
+                        {gw.description}
+                      </p>
+                      <Link
+                        href={`/giveaways?id=${gw._id}${guildIdFromQuery ? `&guildId=${guildIdFromQuery}` : ''}`}
+                        style={styles.viewDetailsBtn}
+                      >
+                        Enter Giveaway
                       </Link>
                     </div>
                   );
-                })}
-              </div>
-            ) : (
-              <div style={styles.emptyList}>
-                <Gift size={32} color="var(--text-muted)" />
-                <h3>No Giveaways Configured</h3>
-                <p>We couldn't find any giveaways for this server ID.</p>
-              </div>
-            )}
-          </div>
-        )}
+                })
+              ) : (
+                <div style={styles.emptyList}>
+                  <span>No giveaways found for this Server ID.</span>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
@@ -454,25 +453,37 @@ function GiveawaysContent() {
 
 export default function GiveawaysPage() {
   return (
-    <Suspense fallback={
-      <div style={{ display: 'flex', flex: 1, alignItems: 'center', justifyContent: 'center', height: '80vh' }}>
-        <div className="spinner"></div>
-      </div>
-    }>
+    <Suspense
+      fallback={
+        <div style={styles.pageWrapper}>
+          <div className="spinner"></div>
+        </div>
+      }
+    >
       <GiveawaysContent />
     </Suspense>
   );
 }
 
 const styles: Record<string, React.CSSProperties> = {
-  container: {
-    maxWidth: '1000px',
-    margin: '0 auto',
-    padding: '40px 20px',
+  pageWrapper: {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: '100vh',
+    width: '100%',
+    background: 'radial-gradient(circle at center, rgba(139, 92, 246, 0.08) 0%, rgba(8, 10, 16, 1) 70%)',
+    padding: '20px',
+  },
+  portalCard: {
+    maxWidth: '520px',
+    width: '100%',
+    padding: '40px 30px',
     display: 'flex',
     flexDirection: 'column',
-    gap: '30px',
-    width: '100%',
+    gap: '24px',
+    boxShadow: '0 20px 40px rgba(0, 0, 0, 0.4)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
   },
   header: {
     textAlign: 'center',
@@ -481,97 +492,69 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     gap: '12px',
   },
-  iconCircle: {
+  logoBadge: {
     background: 'rgba(139, 92, 246, 0.1)',
     border: '1px solid rgba(139, 92, 246, 0.2)',
-    width: '72px',
-    height: '72px',
-    borderRadius: '50%',
+    width: '64px',
+    height: '64px',
+    borderRadius: '16px',
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: '8px',
   },
-  title: {
-    fontSize: '2.25rem',
-    fontWeight: '800',
-    fontFamily: 'var(--font-display)',
-  },
-  subtitle: {
-    color: 'var(--text-secondary)',
-    fontSize: '1.05rem',
-    maxWidth: '600px',
-  },
-  backLink: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '8px',
-    color: 'var(--text-muted)',
-    fontSize: '0.9rem',
-    textDecoration: 'none',
-  },
-  giveawayWrapper: {
-    maxWidth: '700px',
-    margin: '0 auto',
-    width: '100%',
-  },
-  mainCard: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
-  },
-  giveawayHeader: {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-start',
-    gap: '12px',
-  },
   statusBadgeActive: {
-    background: 'rgba(16, 185, 129, 0.15)',
+    background: 'rgba(16, 185, 129, 0.12)',
     color: '#34d399',
-    border: '1px solid rgba(16, 185, 129, 0.25)',
+    border: '1px solid rgba(16, 185, 129, 0.2)',
     padding: '4px 10px',
     borderRadius: '100px',
-    fontSize: '0.75rem',
+    fontSize: '0.7rem',
     fontWeight: '700',
     textTransform: 'uppercase',
   },
   statusBadgeEnded: {
-    background: 'rgba(239, 68, 68, 0.15)',
+    background: 'rgba(239, 68, 68, 0.12)',
     color: '#fca5a5',
-    border: '1px solid rgba(239, 68, 68, 0.25)',
+    border: '1px solid rgba(239, 68, 68, 0.2)',
     padding: '4px 10px',
     borderRadius: '100px',
-    fontSize: '0.75rem',
+    fontSize: '0.7rem',
     fontWeight: '700',
     textTransform: 'uppercase',
   },
-  giveawayTitle: {
-    fontSize: '1.85rem',
+  title: {
+    fontSize: '1.75rem',
     fontWeight: '800',
+    fontFamily: 'var(--font-display)',
+    letterSpacing: '-0.02em',
   },
-  giveawayDesc: {
+  subtitle: {
     color: 'var(--text-secondary)',
-    fontSize: '0.95rem',
+    fontSize: '0.9rem',
     lineHeight: '1.5',
+    maxWidth: '400px',
   },
   metaRow: {
-    display: 'flex',
-    flexWrap: 'wrap',
-    gap: '24px',
+    display: 'grid',
+    gridTemplateColumns: 'repeat(3, 1fr)',
+    gap: '12px',
     padding: '16px 0',
     borderTop: '1px solid rgba(255, 255, 255, 0.05)',
     borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
   },
   metaCol: {
     display: 'flex',
+    flexDirection: 'column',
     alignItems: 'center',
-    gap: '8px',
-    fontSize: '0.9rem',
-    color: 'var(--text-primary)',
+    justifyContent: 'center',
+    gap: '6px',
+    fontSize: '0.8rem',
+    color: 'var(--text-secondary)',
+    textAlign: 'center',
   },
   winnersBox: {
-    background: 'rgba(245, 158, 11, 0.05)',
+    background: 'rgba(245, 158, 11, 0.04)',
     border: '1px solid rgba(245, 158, 11, 0.15)',
     borderRadius: '12px',
     padding: '16px',
@@ -582,7 +565,7 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '6px',
   },
   winnerItem: {
-    fontSize: '0.9rem',
+    fontSize: '0.85rem',
     color: 'var(--text-primary)',
   },
   code: {
@@ -590,7 +573,7 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'rgba(0, 0, 0, 0.3)',
     padding: '2px 6px',
     borderRadius: '4px',
-    color: '#f472b6',
+    color: '#fbbf24',
   },
   entrySection: {
     display: 'flex',
@@ -601,18 +584,18 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '16px',
-    padding: '16px',
+    gap: '12px',
+    padding: '14px 16px',
     background: 'rgba(255, 255, 255, 0.01)',
-    border: '1px solid var(--border-color)',
+    border: '1px solid rgba(255, 255, 255, 0.05)',
     borderRadius: '12px',
   },
   taskItemSuccess: {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: '16px',
-    padding: '16px',
+    gap: '12px',
+    padding: '14px 16px',
     background: 'rgba(16, 185, 129, 0.04)',
     border: '1px solid rgba(16, 185, 129, 0.15)',
     borderRadius: '12px',
@@ -623,81 +606,123 @@ const styles: Record<string, React.CSSProperties> = {
     gap: '4px',
     flex: 1,
   },
-  taskLink: {
-    display: 'inline-flex',
-    alignItems: 'center',
-    gap: '6px',
-    fontSize: '0.8rem',
-    marginTop: '4px',
-  },
-  joinedSuccessBanner: {
-    display: 'flex',
-    alignItems: 'center',
-    gap: '12px',
-    background: 'rgba(16, 185, 129, 0.05)',
-    border: '1px solid rgba(16, 185, 129, 0.25)',
-    padding: '16px',
-    borderRadius: '12px',
-    color: '#34d399',
-    fontWeight: '600',
+  taskLabel: {
     fontSize: '0.9rem',
-    marginTop: '16px',
+    fontWeight: '600',
   },
-  errorText: {
-    color: 'var(--error)',
+  taskSub: {
+    fontSize: '0.75rem',
+    color: 'var(--text-muted)',
+  },
+  taskLabelSuccess: {
+    fontSize: '0.9rem',
+    fontWeight: '600',
+    color: '#34d399',
+  },
+  taskSubSuccess: {
+    fontSize: '0.75rem',
+    color: '#34d399',
+    opacity: 0.8,
+  },
+  taskInput: {
+    flexGrow: 1,
+    background: 'rgba(0, 0, 0, 0.2)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    borderRadius: '8px',
+    color: 'white',
+    padding: '8px 12px',
     fontSize: '0.85rem',
-    marginTop: '8px',
-    textAlign: 'center',
+    outline: 'none',
   },
-  listLayout: {
+  taskWalletConnectBtn: {
+    background: 'rgba(245, 158, 11, 0.1)',
+    border: '1px solid rgba(245, 158, 11, 0.25)',
+    color: '#fbbf24',
+    padding: '8px 12px',
+    borderRadius: '8px',
+    fontSize: '0.8rem',
+    fontWeight: '650',
+    cursor: 'pointer',
+  },
+  discordButton: {
+    background: '#5865f2',
+    color: 'white',
+    border: 'none',
+    padding: '8px 14px',
+    borderRadius: '8px',
+    fontWeight: '600',
+    fontSize: '0.8rem',
+    cursor: 'pointer',
+  },
+  pillSuccessSmall: {
     display: 'flex',
-    flexDirection: 'column',
-    gap: '30px',
-  },
-  resultsWrapper: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '24px',
-  },
-  giveawayGrid: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
-    gap: '20px',
-  },
-  giveawayCard: {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: '12px',
-  },
-  cardHeader: {
-    display: 'flex',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    gap: '4px',
+    background: 'rgba(16, 185, 129, 0.1)',
+    color: '#34d399',
+    padding: '4px 8px',
+    borderRadius: '6px',
+    fontSize: '0.75rem',
+    fontWeight: '600',
   },
-  entriesBadge: {
+  taskBtnAction: {
+    background: 'rgba(255, 255, 255, 0.05)',
+    border: '1px solid rgba(255, 255, 255, 0.1)',
+    color: 'white',
+    padding: '8px 14px',
+    borderRadius: '8px',
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+  },
+  taskBtnCompleted: {
+    background: 'rgba(16, 185, 129, 0.1)',
+    border: '1px solid rgba(16, 185, 129, 0.2)',
+    color: '#34d399',
+    padding: '8px 14px',
+    borderRadius: '8px',
+    fontSize: '0.8rem',
+    fontWeight: '600',
+    cursor: 'pointer',
+  },
+  taskLink: {
     display: 'inline-flex',
     alignItems: 'center',
     gap: '4px',
     fontSize: '0.75rem',
-    color: 'var(--text-muted)',
-    fontWeight: '600',
+    color: 'var(--primary)',
+    textDecoration: 'none',
+    marginTop: '2px',
   },
-  cardTitle: {
-    fontSize: '1.2rem',
-    fontWeight: '700',
-  },
-  cardDesc: {
-    fontSize: '0.85rem',
-    color: 'var(--text-secondary)',
-    lineHeight: '1.4',
-    flexGrow: 1,
-  },
-  cardMeta: {
+  joinedSuccessBanner: {
     display: 'flex',
     alignItems: 'center',
-    gap: '6px',
-    borderTop: '1px solid rgba(255, 255, 255, 0.05)',
-    paddingTop: '12px',
+    gap: '10px',
+    background: 'rgba(16, 185, 129, 0.04)',
+    border: '1px solid rgba(16, 185, 129, 0.15)',
+    padding: '14px',
+    borderRadius: '12px',
+    color: '#34d399',
+    fontSize: '0.85rem',
+    fontWeight: '600',
+  },
+  mainCtaBtn: {
+    width: '100%',
+    background: 'var(--primary-gradient)',
+    color: 'white',
+    border: 'none',
+    padding: '14px',
+    borderRadius: '12px',
+    fontSize: '0.95rem',
+    fontWeight: '700',
+    cursor: 'pointer',
+    boxShadow: '0 4px 12px rgba(139, 92, 246, 0.25)',
+  },
+  errorText: {
+    color: 'var(--error)',
+    fontSize: '0.8rem',
+    marginTop: '8px',
+    textAlign: 'center',
   },
   loadingCenter: {
     display: 'flex',
@@ -705,7 +730,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '12px',
-    padding: '60px 0',
+    padding: '40px 0',
   },
   errorCenter: {
     display: 'flex',
@@ -713,18 +738,41 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: 'center',
     justifyContent: 'center',
     gap: '12px',
-    padding: '60px 0',
+    padding: '40px 0',
     textAlign: 'center',
   },
-  emptyList: {
+  listItem: {
+    background: 'rgba(255, 255, 255, 0.01)',
+    border: '1px solid rgba(255, 255, 255, 0.05)',
+    borderRadius: '12px',
+    padding: '16px',
     display: 'flex',
     flexDirection: 'column',
-    alignItems: 'center',
+  },
+  viewDetailsBtn: {
+    background: 'rgba(255, 255, 255, 0.04)',
+    border: '1px solid rgba(255, 255, 255, 0.08)',
+    color: 'white',
+    padding: '8px 16px',
+    borderRadius: '8px',
+    fontSize: '0.8rem',
+    fontWeight: '600',
     textAlign: 'center',
-    gap: '12px',
-    padding: '60px 20px',
-    background: 'rgba(255, 255, 255, 0.01)',
-    border: '1px solid var(--border-color)',
-    borderRadius: '16px',
+    textDecoration: 'none',
+  },
+  formGroup: {
+    display: 'flex',
+    flexDirection: 'column',
+    gap: '8px',
+  },
+  label: {
+    fontSize: '0.85rem',
+    fontWeight: '650',
+  },
+  emptyList: {
+    textAlign: 'center',
+    padding: '20px',
+    color: 'var(--text-muted)',
+    fontSize: '0.85rem',
   },
 };

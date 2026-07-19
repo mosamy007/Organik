@@ -9,6 +9,12 @@ import { Compass, ShieldCheck, Gift, LayoutDashboard, LogOut, Wallet } from 'luc
 
 export default function Navbar() {
   const pathname = usePathname() || '';
+  
+  // Hide global navbar on verification and giveaway portal pages
+  if (pathname === '/verify' || pathname === '/giveaways') {
+    return null;
+  }
+
   const { walletAddress, connectWallet, disconnectWallet, isConnecting } = useWallet();
   const { user, loading: authLoading, login, logout } = useDiscordAuth();
 
