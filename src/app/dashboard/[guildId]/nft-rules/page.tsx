@@ -43,6 +43,10 @@ export default function NftRulesPage({ params }: PageProps) {
   const [panelStatus, setPanelStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [panelMessage, setPanelMessage] = useState('');
 
+  // Dropdown Error States
+  const [rolesError, setRolesError] = useState('');
+  const [channelsError, setChannelsError] = useState('');
+
   // Status
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [statusMessage, setStatusMessage] = useState('');
@@ -66,6 +70,7 @@ export default function NftRulesPage({ params }: PageProps) {
   // Load roles
   const loadRoles = async () => {
     setLoadingRoles(true);
+    setRolesError('');
     try {
       const res = await fetch(`/api/roles?guildId=${guildId}`);
       if (res.ok) {
@@ -80,9 +85,13 @@ export default function NftRulesPage({ params }: PageProps) {
         if (filteredRoles.length > 0) {
           setSelectedRoleId(filteredRoles[0].id);
         }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setRolesError(data.error || `Failed to load roles: Status ${res.status}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching guild roles:', err);
+      setRolesError(err.message || 'Failed to fetch server roles.');
     } finally {
       setLoadingRoles(false);
     }
@@ -91,6 +100,7 @@ export default function NftRulesPage({ params }: PageProps) {
   // Load channels
   const loadChannels = async () => {
     setLoadingChannels(true);
+    setChannelsError('');
     try {
       const res = await fetch(`/api/channels?guildId=${guildId}`);
       if (res.ok) {
@@ -99,9 +109,13 @@ export default function NftRulesPage({ params }: PageProps) {
         if (data.channels && data.channels.length > 0) {
           setSelectedChannelId(data.channels[0].id);
         }
+      } else {
+        const data = await res.json().catch(() => ({}));
+        setChannelsError(data.error || `Failed to load channels: Status ${res.status}`);
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Error fetching guild channels:', err);
+      setChannelsError(err.message || 'Failed to fetch server channels.');
     } finally {
       setLoadingChannels(false);
     }
@@ -374,6 +388,14 @@ export default function NftRulesPage({ params }: PageProps) {
                     <div className="spinner" style={{ width: '14px', height: '14px' }}></div>
                     <span>Loading roles...</span>
                   </div>
+                ) : rolesError ? (
+                  <div style={{ color: '#f87171', fontSize: '0.85rem', marginTop: '6px' }}>
+                    ⚠️ {rolesError}
+                  </div>
+                ) : roles.length === 0 ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '6px' }}>
+                    ⚠️ No assignable roles found.
+                  </div>
                 ) : (
                   <select
                     className="form-select"
@@ -619,6 +641,14 @@ export default function NftRulesPage({ params }: PageProps) {
                   <div style={styles.loadingSmall}>
                     <div className="spinner" style={{ width: '14px', height: '14px' }}></div>
                     <span>Loading channels...</span>
+                  </div>
+                ) : channelsError ? (
+                  <div style={{ color: '#f87171', fontSize: '0.85rem', marginTop: '6px' }}>
+                    ⚠️ {channelsError}
+                  </div>
+                ) : channels.length === 0 ? (
+                  <div style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '6px' }}>
+                    ⚠️ No channels found.
                   </div>
                 ) : (
                   <select
