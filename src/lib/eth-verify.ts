@@ -206,8 +206,10 @@ export async function verifyTraitsViaAlchemy(
     base: 'base-mainnet',
   };
 
+  const cleanContract = contractAddress.trim().toLowerCase();
+  const cleanWallet = walletAddress.trim().toLowerCase();
   const subdomain = ALCHEMY_SUBDOMAINS[network] || 'eth-mainnet';
-  const url = `https://${subdomain}.g.alchemy.com/nft/v3/${apiKey}/getNFTsForOwner?owner=${walletAddress}&contractAddresses[]=${contractAddress}&withMetadata=true`;
+  const url = `https://${subdomain}.g.alchemy.com/nft/v3/${apiKey}/getNFTsForOwner?owner=${cleanWallet}&contractAddresses[]=${cleanContract}&withMetadata=true`;
 
   try {
     const res = await fetch(url);
@@ -264,7 +266,9 @@ export async function verifyTraitsViaOpenSea(
   const chain = OPENSEA_CHAINS[network];
   if (!chain) return false;
 
-  const url = `https://api.opensea.io/api/v2/chain/${chain}/account/${walletAddress}/nfts`;
+  const cleanContract = contractAddress.trim().toLowerCase();
+  const cleanWallet = walletAddress.trim().toLowerCase();
+  const url = `https://api.opensea.io/api/v2/chain/${chain}/account/${cleanWallet}/nfts`;
 
   try {
     let nextToken = '';
