@@ -16,10 +16,16 @@ from pymongo import MongoClient
 from bson import ObjectId
 
 # Load env variables
-load_dotenv()
+# Load bot/.env explicitly if it exists to support running the bot from root CWD
+bot_env_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), ".env")
+if os.path.exists(bot_env_path):
+    load_dotenv(bot_env_path)
+else:
+    load_dotenv()
+
 TOKEN = os.getenv("TOKEN")
 MONGODB_URI = os.getenv("MONGODB_URI")
-APP_URL = os.getenv("APP_URL", "http://localhost:3000")
+APP_URL = os.getenv("APP_URL") or os.getenv("NEXT_PUBLIC_APP_URL") or "http://localhost:3000"
 
 if not TOKEN:
     print("[CRITICAL] Discord bot token is missing in .env")
