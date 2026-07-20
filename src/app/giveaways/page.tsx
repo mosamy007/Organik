@@ -12,7 +12,7 @@ function GiveawaysContent() {
   const giveawayId = searchParams ? searchParams.get('id') : null;
   const guildIdFromQuery = searchParams ? searchParams.get('guildId') : null;
 
-  const { user, login: discordLogin } = useDiscordAuth();
+  const { user, loading: authLoading, login: discordLogin } = useDiscordAuth();
   const { walletAddress, isConnected, connectWallet, disconnectWallet } = useWallet();
 
   // State
@@ -31,6 +31,17 @@ function GiveawaysContent() {
   const [localWalletInput, setLocalWalletInput] = useState<string>('');
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [submitMessage, setSubmitMessage] = useState<string>('');
+
+  // Auto redirect to Discord OAuth login if user is not authenticated and loading is finished
+  useEffect(() => {
+    if (!authLoading && !user && giveawayId) {
+      const hasToken = searchParams ? searchParams.has('token') : false;
+      if (!hasToken) {
+        const currentPath = window.location.pathname + window.location.search;
+        discordLogin(currentPath);
+      }
+    }
+  }, [authLoading, user, giveawayId, searchParams, discordLogin]);
 
   // Set guildId from query
   useEffect(() => {

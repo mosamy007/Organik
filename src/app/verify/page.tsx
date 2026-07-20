@@ -11,12 +11,23 @@ function VerifyPortalContent() {
   const guildId = searchParams ? searchParams.get('guildId') : null;
 
   const { walletAddress, isConnected, connectWallet, disconnectWallet, signMessage } = useWallet();
-  const { user, login: discordLogin } = useDiscordAuth();
+  const { user, loading: authLoading, login: discordLogin } = useDiscordAuth();
 
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [statusMessage, setStatusMessage] = useState<string>('');
   const [linkedWallets, setLinkedWallets] = useState<string[]>([]);
   const [loadingWallets, setLoadingWallets] = useState<boolean>(false);
+
+  // Auto redirect to Discord OAuth login if user is not authenticated and loading is finished
+  useEffect(() => {
+    if (!authLoading && !user && guildId) {
+      const hasToken = searchParams ? searchParams.has('token') : false;
+      if (!hasToken) {
+        const currentPath = window.location.pathname + window.location.search;
+        discordLogin(currentPath);
+      }
+    }
+  }, [authLoading, user, guildId, searchParams, discordLogin]);
 
   const fetchLinkedWallets = async () => {
     if (!guildId || !user) return;
