@@ -10,7 +10,7 @@ function VerifyPortalContent() {
   const searchParams = useSearchParams();
   const guildId = searchParams ? searchParams.get('guildId') : null;
 
-  const { walletAddress, isConnected, connectWallet, signMessage } = useWallet();
+  const { walletAddress, isConnected, connectWallet, disconnectWallet, signMessage } = useWallet();
   const { user, login: discordLogin } = useDiscordAuth();
 
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -237,11 +237,31 @@ function VerifyPortalContent() {
             </div>
             <div style={styles.stepAction}>
               {isConnected && walletAddress ? (
-                <div style={styles.pillSuccess}>
-                  <Wallet size={14} />
-                  <span>
-                    {walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}
-                  </span>
+                <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                  <div style={styles.pillSuccess}>
+                    <Wallet size={14} />
+                    <span>
+                      {walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}
+                    </span>
+                  </div>
+                  <button
+                    onClick={disconnectWallet}
+                    style={{
+                      background: 'rgba(239, 68, 68, 0.1)',
+                      border: '1px solid rgba(239, 68, 68, 0.2)',
+                      color: '#f87171',
+                      padding: '6px 12px',
+                      borderRadius: '8px',
+                      fontSize: '0.85rem',
+                      fontWeight: '600',
+                      cursor: 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: '4px',
+                    }}
+                  >
+                    Disconnect
+                  </button>
                 </div>
               ) : (
                 <button onClick={connectWallet} style={styles.walletButton}>

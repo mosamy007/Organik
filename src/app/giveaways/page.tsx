@@ -13,7 +13,7 @@ function GiveawaysContent() {
   const guildIdFromQuery = searchParams ? searchParams.get('guildId') : null;
 
   const { user, login: discordLogin } = useDiscordAuth();
-  const { walletAddress, isConnected, connectWallet } = useWallet();
+  const { walletAddress, isConnected, connectWallet, disconnectWallet } = useWallet();
 
   // State
   const [guildId, setGuildId] = useState<string>('');
@@ -310,6 +310,11 @@ function GiveawaysContent() {
                           {!isConnected && !hasEntered && (
                             <button onClick={connectWallet} style={styles.taskWalletConnectBtn}>
                               Connect
+                            </button>
+                          )}
+                          {isConnected && !hasEntered && (
+                            <button onClick={disconnectWallet} style={styles.taskWalletDisconnectBtn}>
+                              Disconnect
                             </button>
                           )}
                         </div>
@@ -638,6 +643,16 @@ const styles: Record<string, React.CSSProperties> = {
     background: 'rgba(245, 158, 11, 0.1)',
     border: '1px solid rgba(245, 158, 11, 0.25)',
     color: '#fbbf24',
+    padding: '8px 12px',
+    borderRadius: '8px',
+    fontSize: '0.8rem',
+    fontWeight: '650',
+    cursor: 'pointer',
+  },
+  taskWalletDisconnectBtn: {
+    background: 'rgba(239, 68, 68, 0.1)',
+    border: '1px solid rgba(239, 68, 68, 0.25)',
+    color: '#f87171',
     padding: '8px 12px',
     borderRadius: '8px',
     fontSize: '0.8rem',
