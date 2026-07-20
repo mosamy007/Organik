@@ -14,7 +14,7 @@ export async function GET(req: NextRequest) {
 
   const allowedAdminIds = process.env.ALLOWED_ADMIN_IDS
     ? process.env.ALLOWED_ADMIN_IDS.split(',')
-    : ['1235578122460594186']; // Default to user's Discord ID
+    : [];
 
   if (!allowedAdminIds.includes(session.discordId)) {
     return NextResponse.json({ error: 'Forbidden: You do not have permission to manage this bot.' }, { status: 403 });
