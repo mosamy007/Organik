@@ -106,7 +106,7 @@ function VerifyPortalContent() {
 
   const handleDisconnectWallet = async (addrToDisconnect: string) => {
     if (!guildId || !user) return;
-    if (!confirm(`Are you sure you want to disconnect wallet ${addrToDisconnect.substring(0, 6)}...${addrToDisconnect.substring(38)}?`)) {
+    if (!confirm(`Are you sure you want to disconnect wallet ${addrToDisconnect.substring(0, 6)}...${addrToDisconnect.substring(addrToDisconnect.length - 4)}?`)) {
       return;
     }
 

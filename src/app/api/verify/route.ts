@@ -231,10 +231,10 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
       }
 
-      await db.collection('verified_wallets').deleteOne({
+      await db.collection('verified_wallets').deleteMany({
         discordId: session.discordId,
         guildId,
-        walletAddress: walletAddress.toLowerCase(),
+        walletAddress: { $regex: new RegExp(`^${walletAddress}$`, 'i') },
       });
 
       return NextResponse.json({

@@ -31,7 +31,7 @@ export default function Navbar() {
     <nav style={styles.nav}>
       <div style={styles.container}>
         {/* Logo */}
-        <Link href="/" style={styles.logoLink}>
+        <Link href="/dashboard" style={styles.logoLink}>
           <div style={styles.logo}>
             <img src="/Website-logo.png" alt="Organik Logo" style={{ height: '32px', width: 'auto' }} />
             <span style={styles.logoText}>Organik Bot</span>
@@ -40,15 +40,6 @@ export default function Navbar() {
 
         {/* Links */}
         <div style={styles.navLinks}>
-          <Link href="/" style={pathname === '/' ? styles.activeLink : styles.link}>
-            <Compass size={18} /> Home
-          </Link>
-          <Link href="/verify" style={pathname.startsWith('/verify') ? styles.activeLink : styles.link}>
-            <ShieldCheck size={18} /> NFT Verify
-          </Link>
-          <Link href="/giveaways" style={pathname.startsWith('/giveaways') ? styles.activeLink : styles.link}>
-            <Gift size={18} /> Giveaways
-          </Link>
           <Link href="/dashboard" style={pathname.startsWith('/dashboard') ? styles.activeLink : styles.link}>
             <LayoutDashboard size={18} /> Dashboard
           </Link>

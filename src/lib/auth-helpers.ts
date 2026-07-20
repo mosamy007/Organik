@@ -13,6 +13,15 @@ export async function verifyGuildAdmin(session: SessionData | null, guildId: str
     return false;
   }
 
+  const allowedAdminIds = process.env.ALLOWED_ADMIN_IDS
+    ? process.env.ALLOWED_ADMIN_IDS.split(',')
+    : ['1235578122460594186']; // Default to user's Discord ID
+
+  if (!allowedAdminIds.includes(session.discordId)) {
+    console.log(`[verifyGuildAdmin] Authorization failed: User "${session.username}" (ID: ${session.discordId}) is not in the allowed admin list.`);
+    return false;
+  }
+
   try {
     const guilds = await getDiscordUserGuilds(session.accessToken);
     const target = guilds.find((g) => g.id === guildId);
@@ -49,6 +58,14 @@ export async function checkGuildAdmin(
 ): Promise<{ authorized: boolean; reason: string }> {
   if (!session) {
     return { authorized: false, reason: 'No active login session. Please log out and log in again.' };
+  }
+
+  const allowedAdminIds = process.env.ALLOWED_ADMIN_IDS
+    ? process.env.ALLOWED_ADMIN_IDS.split(',')
+    : ['1235578122460594186']; // Default to user's Discord ID
+
+  if (!allowedAdminIds.includes(session.discordId)) {
+    return { authorized: false, reason: 'Forbidden: You do not have permission to manage this bot.' };
   }
 
   try {
