@@ -10,10 +10,14 @@ if hasattr(sys.stderr, 'buffer'):
     sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 
 import discord
-from discord.ext import commands
+from discord.ext import commands, tasks
 from discord import app_commands
 from pymongo import MongoClient
 from bson import ObjectId
+import urllib.request
+import xml.etree.ElementTree as ET
+import json
+import re
 
 # Load env variables
 # Load bot/.env explicitly if it exists to support running the bot from root CWD
@@ -189,6 +193,262 @@ class VerifyLinkView(discord.ui.View):
                     content=f"❌ **Verification Error:** {res.get('message') or res.get('error') or 'An unexpected error occurred.'}"
                 )
 
+# Helper to fetch Twitter RSS
+def fetch_tweets_rss(username: str):
+    instances = [
+        f"https://nitter.privacydev.net/{username}/rss",
+        f"https://nitter.poast.org/{username}/rss",
+        f"https://nitter.moomoo.me/{username}/rss",
+        f"https://rsshub.app/twitter/user/{username}"
+    ]
+    for url in instances:
+        try:
+            req = urllib.request.Request(
+                url, 
+                headers={'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36'}
+            )
+            with urllib.request.urlopen(req, timeout=10) as response:
+                xml_data = response.read()
+                root = ET.fromstring(xml_data)
+                items = []
+                for item in root.findall('.//item'):
+                    link = item.find('link').text if item.find('link') is not None else ''
+                    title = item.find('title').text if item.find('title') is not None else ''
+                    
+                    tweet_id_match = re.search(r'/status/(\d+)', link)
+                    tweet_id = tweet_id_match.group(1) if tweet_id_match else None
+                    
+                    if tweet_id:
+                        items.append({
+                            'id': tweet_id,
+                            'title': title,
+                            'link': f"https://x.com/{username}/status/{tweet_id}"
+                        })
+                if items:
+                    return items
+        except Exception:
+            pass
+    return []
+
+# Helper to fetch OpenSea sales
+def fetch_opensea_sales(slug: str):
+    opensea_key = os.getenv("OPENSEA_API_KEY")
+    if not opensea_key:
+        print("[OpenSea API] OPENSEA_API_KEY is missing in bot environment")
+        return []
+    url = f"https://api.opensea.io/api/v2/events/collection/{slug}?event_type=sale&limit=5"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                'x-api-key': opensea_key,
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0'
+            }
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            return data.get('asset_events', [])
+    except Exception as e:
+        print(f"[OpenSea API] Error fetching sales for slug {slug}: {e}")
+    return []
+
+# Helper to resolve OpenSea slug from contract address
+async def resolve_opensea_slug(chain: str, address: str):
+    opensea_key = os.getenv("OPENSEA_API_KEY")
+    if not opensea_key:
+        return None
+    url = f"https://api.opensea.io/api/v2/chain/{chain}/contract/{address}"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                'x-api-key': opensea_key,
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0'
+            }
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            return {
+                "slug": data.get("collection", ""),
+                "name": data.get("name", "Unnamed Collection")
+            }
+    except Exception as e:
+        print(f"[OpenSea Slug Resolution] Error for {address}: {e}")
+    return None
+
+# Twitter Polling Loop
+@tasks.loop(seconds=300)
+async def twitter_polling_loop():
+    if db is None:
+        return
+    try:
+        active_twitter = db["integrations"].find({
+            "twitter.enabled": True,
+            "twitter.channelId": {"$ne": ""}
+        })
+        for config in active_twitter:
+            guild_id = config.get("guildId")
+            channel_id = config.get("twitter", {}).get("channelId")
+            accounts = config.get("twitter", {}).get("accounts", [])
+            last_processed = config.get("twitter", {}).get("lastProcessedIds", {})
+
+            if not channel_id or not accounts:
+                continue
+
+            channel = bot.get_channel(int(channel_id))
+            if not channel:
+                try:
+                    channel = await bot.fetch_channel(int(channel_id))
+                except Exception:
+                    continue
+
+            db_updated = False
+            for username in accounts:
+                tweets = fetch_tweets_rss(username)
+                if not tweets:
+                    continue
+
+                processed_ids = last_processed.get(username, [])
+                new_tweets = [t for t in tweets if t['id'] not in processed_ids]
+
+                for tweet in reversed(new_tweets):
+                    try:
+                        await channel.send(tweet['link'])
+                        processed_ids.append(tweet['id'])
+                        db_updated = True
+                    except Exception as send_err:
+                        print(f"[Twitter Loop] Error posting tweet {tweet['id']} to channel {channel_id}: {send_err}")
+
+                if len(processed_ids) > 20:
+                    processed_ids = processed_ids[-20:]
+                last_processed[username] = processed_ids
+
+            if db_updated:
+                db["integrations"].update_one(
+                    {"guildId": guild_id},
+                    {"$set": {"twitter.lastProcessedIds": last_processed}}
+                )
+    except Exception as e:
+        print(f"[Twitter Loop] Error in background task: {e}")
+
+# Sales Polling Loop
+@tasks.loop(seconds=120)
+async def sales_polling_loop():
+    if db is None:
+        return
+    try:
+        active_sales = db["integrations"].find({
+            "sales.enabled": True,
+            "sales.channelId": {"$ne": ""}
+        })
+        for config in active_sales:
+            guild_id = config.get("guildId")
+            channel_id = config.get("sales", {}).get("channelId")
+            contracts = config.get("sales", {}).get("contracts", [])
+            last_processed = config.get("sales", {}).get("lastProcessedTxHashes", [])
+
+            if not channel_id or not contracts:
+                continue
+
+            channel = bot.get_channel(int(channel_id))
+            if not channel:
+                try:
+                    channel = await bot.fetch_channel(int(channel_id))
+                except Exception:
+                    continue
+
+            db_updated = False
+            for contract in contracts:
+                address = contract.get("address")
+                chain = contract.get("chain", "ethereum")
+                slug = contract.get("slug")
+                name = contract.get("name") or "Unnamed Collection"
+
+                if not address:
+                    continue
+
+                # If collection slug is missing, attempt to fetch it and update DB config
+                if not slug:
+                    resolved = await resolve_opensea_slug(chain, address)
+                    if resolved:
+                        slug = resolved["slug"]
+                        name = resolved["name"]
+                        db["integrations"].update_one(
+                            {"guildId": guild_id, "sales.contracts.address": address},
+                            {"$set": {
+                                "sales.contracts.$.slug": slug,
+                                "sales.contracts.$.name": name
+                            }}
+                        )
+                    else:
+                        continue
+
+                events = fetch_opensea_sales(slug)
+                if not events:
+                    continue
+
+                for event in reversed(events):
+                    tx_hash = event.get('transaction')
+                    nft_info = event.get('nft', {})
+                    token_id = nft_info.get('identifier')
+
+                    if not tx_hash or not token_id:
+                        continue
+
+                    sale_key = f"{tx_hash}:{token_id}"
+                    if sale_key in last_processed:
+                        continue
+
+                    payment = event.get('payment', {})
+                    quantity = payment.get('quantity')
+                    decimals = payment.get('decimals', 18)
+                    symbol = payment.get('symbol', 'ETH')
+
+                    price_formatted = "Unknown"
+                    if quantity:
+                        try:
+                            price = float(quantity) / (10 ** decimals)
+                            price_formatted = f"{price:.4f}".rstrip('0').rstrip('.')
+                        except Exception:
+                            pass
+
+                    nft_name = nft_info.get('name') or f"{name} #{token_id}"
+                    image_url = nft_info.get('image_url')
+                    opensea_url = nft_info.get('opensea_url') or f"https://opensea.io/assets/{chain}/{address}/{token_id}"
+                    explorer_url = f"https://basescan.org/tx/{tx_hash}" if chain == "base" else f"https://etherscan.io/tx/{tx_hash}"
+
+                    embed = discord.Embed(
+                        title="🎉 New NFT Sale!",
+                        description=f"**[{nft_name}]({opensea_url})** has been sold!",
+                        color=0x06b6d4,
+                        url=opensea_url
+                    )
+                    embed.add_field(name="Price", value=f"💰 {price_formatted} {symbol}", inline=True)
+                    embed.add_field(name="Blockchain", value=f"⛓️ {chain.capitalize()}", inline=True)
+                    embed.add_field(name="Transaction", value=f"🔗 [View Tx]({explorer_url})", inline=True)
+                    
+                    if image_url:
+                        embed.set_image(url=image_url)
+
+                    try:
+                        await channel.send(embed=embed)
+                        last_processed.append(sale_key)
+                        db_updated = True
+                    except Exception as send_err:
+                        print(f"[Sales Loop] Error posting sale embed to channel {channel_id}: {send_err}")
+
+            if db_updated:
+                if len(last_processed) > 50:
+                    last_processed = last_processed[-50:]
+                db["integrations"].update_one(
+                    {"guildId": guild_id},
+                    {"$set": {"sales.lastProcessedTxHashes": last_processed}}
+                )
+    except Exception as e:
+        print(f"[Sales Loop] Error in background task: {e}")
+
 class GiveawayLinkView(discord.ui.View):
     def __init__(self, giveaway_id: str, guild_id: str):
         super().__init__(timeout=None)
@@ -211,6 +471,15 @@ async def on_ready():
         print(f"[SYNC] Synced {len(synced)} slash commands globally.")
     except Exception as e:
         print(f"[ERROR] Failed to sync slash commands: {e}")
+
+    # Start background loops if not already running
+    if not twitter_polling_loop.is_running():
+        twitter_polling_loop.start()
+        print("[SUCCESS] Started Twitter polling loop task.")
+    if not sales_polling_loop.is_running():
+        sales_polling_loop.start()
+        print("[SUCCESS] Started NFT sales polling loop task.")
+
     print(f"[READY] Organik Bot is active and logged in as: {bot.user}")
 
 @bot.event
