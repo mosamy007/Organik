@@ -33,7 +33,7 @@ export default function Navbar() {
         {/* Logo */}
         <Link href="/" style={styles.logoLink}>
           <div style={styles.logo}>
-            <span style={styles.logoSymbol}>☘️</span>
+            <img src="/Website-logo.png" alt="Organik Logo" style={{ height: '32px', width: 'auto' }} />
             <span style={styles.logoText}>Organik Bot</span>
           </div>
         </Link>

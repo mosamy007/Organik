@@ -107,6 +107,7 @@ export async function POST(req: NextRequest) {
       endTime: new Date(endTime),
       winnerCount: Math.max(1, Number(winnerCount) || 1),
       tasks: Array.isArray(tasks) ? tasks : [],
+      channelId: channelId || null,
       status: 'active',
       createdAt: new Date(),
       winners: [],
@@ -292,7 +293,8 @@ export async function PATCH(req: NextRequest) {
   const session = getSession(req);
 
   try {
-    const { giveawayId, guildId } = await req.json();
+    const body = await req.json();
+    const { giveawayId, guildId, action } = body;
 
     if (!giveawayId || !guildId) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
@@ -306,6 +308,40 @@ export async function PATCH(req: NextRequest) {
 
     const db = await getDb();
 
+    // Handle Edit Giveaway Action
+    if (action === 'edit_giveaway') {
+      const { title, description, prize, allowedRoles, winnerRoleRewardId, endTime, winnerCount, tasks, channelId, imageUrl } = body;
+      const actualTitle = title?.trim() || prize?.trim();
+
+      if (!actualTitle || !prize || !endTime || !winnerCount) {
+        return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
+      }
+
+      await db.collection('giveaways').updateOne(
+        { _id: new ObjectId(giveawayId), guildId },
+        {
+          $set: {
+            title: actualTitle,
+            description: description?.trim() || '',
+            prize: prize.trim(),
+            imageUrl: imageUrl?.trim() || null,
+            allowedRoles: Array.isArray(allowedRoles) ? allowedRoles : [],
+            winnerRoleRewardId: winnerRoleRewardId || null,
+            endTime: new Date(endTime),
+            winnerCount: Math.max(1, Number(winnerCount) || 1),
+            tasks: Array.isArray(tasks) ? tasks : [],
+            channelId: channelId || null,
+          },
+        }
+      );
+
+      return NextResponse.json({
+        success: true,
+        message: 'Giveaway updated successfully.',
+      });
+    }
+
+    // Handle Draw Winners Action (Default)
     // 1. Fetch giveaway details
     const giveaway = await db.collection('giveaways').findOne({ _id: new ObjectId(giveawayId), guildId });
     if (!giveaway) {
@@ -323,6 +359,20 @@ export async function PATCH(req: NextRequest) {
       await db
         .collection('giveaways')
         .updateOne({ _id: new ObjectId(giveawayId) }, { $set: { status: 'ended', winners: [] } });
+
+      // Post to discord
+      if (giveaway.channelId) {
+        try {
+          const embed = {
+            title: `🎉 GIVEAWAY ENDED: ${giveaway.prize} 🎉`,
+            description: `The giveaway has ended, but there were 0 participants. Better luck next time!`,
+            color: 0xef4444, // Red
+          };
+          await sendChannelMessage(giveaway.channelId, `The giveaway for ${giveaway.prize} has ended with 0 participants.`, [embed]);
+        } catch (msgErr) {
+          console.error('Failed to announce ended with no entries:', msgErr);
+        }
+      }
 
       return NextResponse.json({ success: true, winners: [], message: 'Giveaway ended with 0 participants' });
     }
@@ -352,15 +402,19 @@ export async function PATCH(req: NextRequest) {
         { $set: { status: 'ended', winners: winnerDiscordIds, endedAt: new Date() } }
       );
 
-    // 6. Send announcement message if we can find a channel or we can just return
-    try {
-      const winnerMentions = winnerDiscordIds.map((id) => `<@${id}>`).join(', ');
-      const messageContent = `🎉 **Giveaway Results for ${giveaway.prize}** 🎉\n\nCongratulations to the winners: ${winnerMentions || 'None'}!\nThey have been drawn from ${entries.length} participants.`;
-      
-      // Try to find a channel to announce (or we can announcement via API if we knew channel, let's look if we can announce in the chat or we just log)
-      console.log('Winners drawn:', winnerDiscordIds);
-    } catch (msgErr) {
-      console.error('Failed to announce winners:', msgErr);
+    // 6. Send announcement message and tag winners in Discord
+    if (giveaway.channelId) {
+      try {
+        const winnerMentions = winnerDiscordIds.map((id) => `<@${id}>`).join(', ');
+        const embed = {
+          title: `🎉 GIVEAWAY ENDED: ${giveaway.prize} 🎉`,
+          description: `The giveaway has ended! Congratulations to the winners!\n\n🏆 **Winners:** ${winnerMentions || 'None'}\n\nThank you to all **${entries.length}** participants!`,
+          color: 0x34d399, // Green
+        };
+        await sendChannelMessage(giveaway.channelId, `Congratulations ${winnerMentions}!`, [embed]);
+      } catch (msgErr) {
+        console.error('Failed to announce winners in Discord:', msgErr);
+      }
     }
 
     return NextResponse.json({
@@ -372,7 +426,7 @@ export async function PATCH(req: NextRequest) {
       })),
     });
   } catch (err: any) {
-    console.error('Draw winners error:', err);
+    console.error('PATCH winners/edit error:', err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
   }
 }

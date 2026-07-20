@@ -17,6 +17,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
   const [loadingList, setLoadingList] = useState(true);
   const [roles, setRoles] = useState<any[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(true);
+  const [editingGiveawayId, setEditingGiveawayId] = useState<string | null>(null);
 
   // Form State
   const [prize, setPrize] = useState('');
@@ -182,21 +183,24 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
       return;
     }
 
+    const isEditing = !!editingGiveawayId;
     setSubmitStatus('loading');
-    setStatusMessage('Creating server giveaway...');
+    setStatusMessage(isEditing ? 'Updating server giveaway...' : 'Creating server giveaway...');
 
     try {
       const payload = {
         guildId,
+        giveawayId: editingGiveawayId || undefined,
+        action: isEditing ? 'edit_giveaway' : undefined,
         title: prize.trim(),
         prize: prize.trim(),
         description: description.trim(),
         winnerCount: Number(winnerCount),
         endTime: new Date(endTime).toISOString(),
-        rewardRoleId: rewardRoleId || undefined,
-        restrictRoleId: restrictRoleId || undefined,
-        channelId: selectedChannelId || undefined,
-        imageUrl: imageUrl.trim() || undefined,
+        winnerRoleRewardId: rewardRoleId || null,
+        restrictRoleId: restrictRoleId || null,
+        channelId: selectedChannelId || null,
+        imageUrl: imageUrl.trim() || null,
         tasks: tasks.map((t) => ({
           id: t.id,
           type: t.type,
@@ -207,7 +211,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
       };
 
       const res = await fetch('/api/giveaways', {
-        method: 'POST',
+        method: isEditing ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -216,23 +220,25 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
 
       if (res.ok) {
         setSubmitStatus('success');
-        setStatusMessage('Giveaway created successfully!');
+        setStatusMessage(isEditing ? 'Giveaway updated successfully!' : 'Giveaway created successfully!');
         // Reset form
         setPrize('');
         setDescription('');
         setWinnerCount('1');
         setEndTime('');
         setImageUrl('');
+        setRewardRoleId('');
         setRestrictRoleId('');
         setTasks([{ id: 't1', type: 'wallet_input', label: 'Submit EVM Wallet Address', required: true }]);
+        setEditingGiveawayId(null);
         // Reload giveaways
         loadGiveaways();
       } else {
         setSubmitStatus('error');
-        setStatusMessage(data.error || 'Failed to create giveaway.');
+        setStatusMessage(data.error || (isEditing ? 'Failed to update giveaway.' : 'Failed to create giveaway.'));
       }
     } catch (err: any) {
-      console.error('Create giveaway error:', err);
+      console.error('Save giveaway error:', err);
       setSubmitStatus('error');
       setStatusMessage(err.message || 'An unexpected error occurred.');
     }
@@ -243,11 +249,11 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
 
     try {
       const res = await fetch('/api/giveaways', {
-        method: 'POST',
+        method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'draw',
           giveawayId,
+          guildId,
         }),
       });
 
@@ -262,6 +268,66 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
     } catch (err) {
       console.error('Draw winners error:', err);
       alert('An error occurred during drawing.');
+    }
+  };
+
+  const handleCancelEdit = () => {
+    setEditingGiveawayId(null);
+    setPrize('');
+    setDescription('');
+    setWinnerCount('1');
+    setEndTime('');
+    setImageUrl('');
+    setRewardRoleId('');
+    setRestrictRoleId('');
+    setTasks([{ id: 't1', type: 'wallet_input', label: 'Submit EVM Wallet Address', required: true }]);
+  };
+
+  const handleEditClick = (gw: any) => {
+    setEditingGiveawayId(gw._id);
+    setPrize(gw.prize || '');
+    setDescription(gw.description || '');
+    setWinnerCount(gw.winnerCount?.toString() || '1');
+    
+    // Format date for datetime-local input
+    if (gw.endTime) {
+      const date = new Date(gw.endTime);
+      const tzOffset = date.getTimezoneOffset() * 60000;
+      const formatted = new Date(date.getTime() - tzOffset).toISOString().slice(0, 16);
+      setEndTime(formatted);
+    } else {
+      setEndTime('');
+    }
+    
+    setSelectedChannelId(gw.channelId || '');
+    setImageUrl(gw.imageUrl || '');
+    setRewardRoleId(gw.winnerRoleRewardId || '');
+    setRestrictRoleId(gw.restrictRoleId || '');
+    setTasks(gw.tasks && gw.tasks.length > 0 ? gw.tasks : [{ id: 't1', type: 'wallet_input', label: 'Submit EVM Wallet Address', required: true }]);
+  };
+
+  const handleDeleteGiveaway = async (giveawayId: string) => {
+    if (!confirm('Are you sure you want to permanently delete this giveaway and all its entries? This action cannot be undone.')) return;
+
+    try {
+      const res = await fetch(`/api/giveaways?giveawayId=${giveawayId}&guildId=${guildId}`, {
+        method: 'DELETE',
+      });
+
+      const data = await res.json();
+
+      if (res.ok) {
+        alert(data.message || 'Giveaway deleted successfully!');
+        loadGiveaways();
+        if (editingGiveawayId === giveawayId) {
+          handleCancelEdit();
+        }
+      } else {
+        alert(data.error || 'Failed to delete giveaway.');
+      }
+    } catch (err) {
+      console.error('Delete giveaway error:', err);
+      alert('An error occurred during deletion.');
     }
   };
 
@@ -304,7 +370,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
         {/* Creation Card */}
         <div className="glass-card" style={styles.formCard}>
           <h2 style={{ fontSize: '1.25rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <Plus size={20} color="var(--primary)" /> Create Server Giveaway
+            <Plus size={20} color="var(--primary)" /> {editingGiveawayId ? 'Edit Server Giveaway' : 'Create Server Giveaway'}
           </h2>
 
           <form onSubmit={handleCreateGiveaway} style={styles.form}>
@@ -521,15 +587,33 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
               </div>
             )}
 
-            <button type="submit" disabled={submitStatus === 'loading'} className="btn btn-primary" style={{ width: '100%' }}>
-              {submitStatus === 'loading' ? (
-                <>
-                  <div className="spinner" style={{ width: '16px', height: '16px' }}></div> Creating...
-                </>
-              ) : (
-                'Launch Giveaway'
+            <div style={{ display: 'flex', gap: '10px' }}>
+              <button
+                type="submit"
+                disabled={submitStatus === 'loading'}
+                className="btn btn-primary"
+                style={{ flex: 2 }}
+              >
+                {submitStatus === 'loading' ? (
+                  <>
+                    <div className="spinner" style={{ width: '16px', height: '16px' }}></div>{' '}
+                    {editingGiveawayId ? 'Updating...' : 'Creating...'}
+                  </>
+                ) : (
+                  editingGiveawayId ? 'Update Giveaway' : 'Launch Giveaway'
+                )}
+              </button>
+              {editingGiveawayId && (
+                <button
+                  type="button"
+                  onClick={handleCancelEdit}
+                  className="btn btn-secondary"
+                  style={{ flex: 1, color: 'var(--text-secondary)' }}
+                >
+                  Cancel
+                </button>
               )}
-            </button>
+            </div>
           </form>
         </div>
 
@@ -576,16 +660,36 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
                       </div>
                     </div>
 
-                    {!isEnded ? (
+                    <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
+                      {!isEnded && (
+                        <>
+                          <button
+                            onClick={() => handleDrawWinners(gw._id)}
+                            className="btn btn-secondary"
+                            style={{ flex: 2, color: '#34d399', borderColor: 'rgba(16,185,129,0.2)' }}
+                          >
+                            End & Draw
+                          </button>
+                          <button
+                            onClick={() => handleEditClick(gw)}
+                            className="btn btn-secondary"
+                            style={{ flex: 1, color: '#fbbf24', borderColor: 'rgba(245,158,11,0.2)' }}
+                          >
+                            Edit
+                          </button>
+                        </>
+                      )}
                       <button
-                        onClick={() => handleDrawWinners(gw._id)}
+                        onClick={() => handleDeleteGiveaway(gw._id)}
                         className="btn btn-secondary"
-                        style={{ marginTop: '10px', color: '#34d399', borderColor: 'rgba(16,185,129,0.2)' }}
+                        style={{ flex: 1, color: '#f87171', borderColor: 'rgba(239,68,68,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '4px' }}
                       >
-                        End & Draw Winners Now
+                        <Trash2 size={14} /> Delete
                       </button>
-                    ) : (
-                      <div style={styles.drawnWinnersBox}>
+                    </div>
+
+                    {isEnded && (
+                      <div style={{ ...styles.drawnWinnersBox, marginTop: '12px' }}>
                         <strong style={{ fontSize: '0.85rem', color: '#fbbf24' }}>🏆 Winners drawn:</strong>
                         <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
                           {gw.winners && gw.winners.length > 0 ? (
