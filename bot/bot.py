@@ -193,15 +193,22 @@ class VerifyLinkView(discord.ui.View):
                     content=f"❌ **Verification Error:** {res.get('message') or res.get('error') or 'An unexpected error occurred.'}"
                 )
 
-# Helper to fetch Twitter RSS
-def fetch_tweets_rss(username: str):
-    instances = [
-        f"https://nitter.privacydev.net/{username}/rss",
-        f"https://nitter.poast.org/{username}/rss",
-        f"https://nitter.moomoo.me/{username}/rss",
-        f"https://rsshub.app/twitter/user/{username}"
-    ]
-    for url in instances:
+# Helper to fetch Twitter RSS (supports usernames or direct RSS URLs)
+def fetch_tweets_rss(source: str):
+    source = source.strip()
+    if source.startswith("http://") or source.startswith("https://"):
+        urls = [source]
+        username = "rss_feed"
+    else:
+        username = source.replace('@', '')
+        urls = [
+            f"https://nitter.privacydev.net/{username}/rss",
+            f"https://nitter.poast.org/{username}/rss",
+            f"https://nitter.moomoo.me/{username}/rss",
+            f"https://rsshub.app/twitter/user/{username}"
+        ]
+
+    for url in urls:
         try:
             req = urllib.request.Request(
                 url, 
@@ -213,20 +220,32 @@ def fetch_tweets_rss(username: str):
                 items = []
                 for item in root.findall('.//item'):
                     link = item.find('link').text if item.find('link') is not None else ''
+                    guid_elem = item.find('guid')
+                    guid = guid_elem.text if guid_elem is not None else link
                     title = item.find('title').text if item.find('title') is not None else ''
                     
                     tweet_id_match = re.search(r'/status/(\d+)', link)
-                    tweet_id = tweet_id_match.group(1) if tweet_id_match else None
+                    tweet_id = tweet_id_match.group(1) if tweet_id_match else guid
                     
                     if tweet_id:
+                        display_link = link
+                        # Normalize Twitter/Nitter status URLs to standard x.com links
+                        if "twitter.com" in link or "nitter" in link:
+                            link_user = username
+                            user_match = re.search(r'(?:twitter\.com|nitter\.[a-z\.]+)/([^/]+)/status', link)
+                            if user_match:
+                                link_user = user_match.group(1)
+                            display_link = f"https://x.com/{link_user}/status/{tweet_id}"
+                        
                         items.append({
                             'id': tweet_id,
                             'title': title,
-                            'link': f"https://x.com/{username}/status/{tweet_id}"
+                            'link': display_link
                         })
                 if items:
                     return items
-        except Exception:
+        except Exception as e:
+            # Silence and try next URL
             pass
     return []
 
@@ -311,6 +330,15 @@ async def twitter_polling_loop():
                     continue
 
                 processed_ids = last_processed.get(username, [])
+                
+                # If this is the first time we poll this feed, initialize it with current tweets
+                # so we don't spam the channel with old historical tweets
+                if not processed_ids:
+                    processed_ids = [t['id'] for t in tweets]
+                    last_processed[username] = processed_ids
+                    db_updated = True
+                    continue
+
                 new_tweets = [t for t in tweets if t['id'] not in processed_ids]
 
                 for tweet in reversed(new_tweets):
@@ -321,8 +349,8 @@ async def twitter_polling_loop():
                     except Exception as send_err:
                         print(f"[Twitter Loop] Error posting tweet {tweet['id']} to channel {channel_id}: {send_err}")
 
-                if len(processed_ids) > 20:
-                    processed_ids = processed_ids[-20:]
+                if len(processed_ids) > 50:
+                    processed_ids = processed_ids[-50:]
                 last_processed[username] = processed_ids
 
             if db_updated:

@@ -79,13 +79,19 @@ export default function IntegrationsPage({ params }: PageProps) {
 
   // Handle adding Twitter account
   const handleAddTwitter = () => {
-    const handle = newTwitterInput.trim().replace('@', '');
-    if (!handle) return;
-    if (twitterAccounts.includes(handle)) {
-      alert('This Twitter account is already added.');
+    let inputVal = newTwitterInput.trim();
+    if (!inputVal) return;
+    
+    // If it's a direct URL, preserve it; otherwise clean username
+    const entry = (inputVal.startsWith('http://') || inputVal.startsWith('https://')) 
+      ? inputVal 
+      : inputVal.replace('@', '');
+
+    if (twitterAccounts.includes(entry)) {
+      alert('This Twitter account/feed is already added.');
       return;
     }
-    setTwitterAccounts([...twitterAccounts, handle]);
+    setTwitterAccounts([...twitterAccounts, entry]);
     setNewTwitterInput('');
   };
 
@@ -238,19 +244,21 @@ export default function IntegrationsPage({ params }: PageProps) {
             </div>
 
             <div style={styles.subSection}>
-              <label className="form-label">Monitored Twitter Accounts</label>
+              <label className="form-label">Monitored Twitter Handles / RSS Feeds</label>
+              <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', marginTop: '-4px' }}>
+                Enter a Twitter username (e.g. <code>organik_concepts</code>) or paste a direct RSS Feed URL (e.g. from <code>RSS.app</code> or <code>FetchRSS</code>) for 100% reliability.
+              </p>
               <div style={styles.inputRow}>
                 <div style={styles.handleInputContainer}>
-                  <span style={styles.atSymbol}>@</span>
                   <input 
                     type="text" 
                     className="form-input" 
-                    placeholder="organik_concepts" 
+                    placeholder="Username or RSS Feed URL" 
                     value={newTwitterInput}
                     onChange={(e) => setNewTwitterInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAddTwitter()}
                     disabled={!twitterEnabled}
-                    style={{ paddingLeft: '28px' }}
+                    style={{ paddingLeft: '12px' }}
                   />
                 </div>
                 <button 
@@ -264,12 +272,14 @@ export default function IntegrationsPage({ params }: PageProps) {
 
               <div style={styles.listContainer}>
                 {twitterAccounts.length === 0 ? (
-                  <div style={styles.emptyList}>No Twitter handles monitored yet.</div>
+                  <div style={styles.emptyList}>No Twitter handles or RSS Feeds monitored yet.</div>
                 ) : (
                   <ul style={styles.list}>
                     {twitterAccounts.map((handle, idx) => (
                       <li key={idx} style={styles.listItem}>
-                        <span>@{handle}</span>
+                        <span style={{ wordBreak: 'break-all', paddingRight: '8px' }}>
+                          {handle.startsWith('http') ? handle : `@${handle}`}
+                        </span>
                         <button 
                           style={styles.deleteBtn} 
                           onClick={() => handleRemoveTwitter(idx)}
