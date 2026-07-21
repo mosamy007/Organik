@@ -271,6 +271,31 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
     }
   };
 
+  const handleExportWinners = (gw: any) => {
+    if (!gw.winners || gw.winners.length === 0) {
+      alert('No winners to export.');
+      return;
+    }
+
+    const headers = ['Username', 'Discord ID', 'Wallet Address'];
+    const rows = gw.winners.map((w: any) => {
+      const username = typeof w === 'object' ? w.username : '';
+      const discordId = typeof w === 'object' ? w.discordId : w;
+      const walletAddress = typeof w === 'object' ? w.walletAddress : '';
+      return [username, discordId, walletAddress].map(val => `"${String(val || '').replace(/"/g, '""')}"`).join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `${(gw.prize || 'giveaway').replace(/[^a-zA-Z0-9]/g, '_')}_winners.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
   const handleCancelEdit = () => {
     setEditingGiveawayId(null);
     setPrize('');
@@ -690,10 +715,30 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
 
                     {isEnded && (
                       <div style={{ ...styles.drawnWinnersBox, marginTop: '12px' }}>
-                        <strong style={{ fontSize: '0.85rem', color: '#fbbf24' }}>🏆 Winners drawn:</strong>
-                        <div style={{ fontSize: '0.8rem', marginTop: '4px' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <strong style={{ fontSize: '0.85rem', color: '#fbbf24' }}>🏆 Winners drawn:</strong>
+                          {gw.winners && gw.winners.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={() => handleExportWinners(gw)}
+                              className="btn btn-secondary"
+                              style={{ fontSize: '0.75rem', padding: '3px 8px', color: '#10b981', borderColor: 'rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.1)' }}
+                            >
+                              📥 Export Excel/CSV
+                            </button>
+                          )}
+                        </div>
+                        <div style={{ fontSize: '0.8rem', marginTop: '6px', lineHeight: '1.4' }}>
                           {gw.winners && gw.winners.length > 0 ? (
-                            gw.winners.map((wId: string) => `@${wId}`).join(', ')
+                            gw.winners.map((w: any, idx: number) => {
+                              const username = typeof w === 'object' ? (w.username || w.discordId) : w;
+                              const wallet = typeof w === 'object' && w.walletAddress ? ` (${w.walletAddress})` : '';
+                              return (
+                                <div key={idx} style={{ color: 'var(--text-primary)', wordBreak: 'break-all' }}>
+                                  • <strong>@{username}</strong>{wallet ? <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{wallet}</span> : null}
+                                </div>
+                              );
+                            })
                           ) : (
                             <span style={{ color: 'var(--text-muted)' }}>No participants entered</span>
                           )}

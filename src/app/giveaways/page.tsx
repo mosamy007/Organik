@@ -211,9 +211,24 @@ function GiveawaysContent() {
         <div style={styles.portalCard} className="glass-card animate-fade-in">
           {/* Header */}
           <div style={styles.header}>
-            <div style={styles.logoBadge}>
-              <Gift size={32} color="var(--primary)" />
-            </div>
+            {giveaway.imageUrl ? (
+              <img
+                src={giveaway.imageUrl}
+                alt={giveaway.prize}
+                style={{
+                  width: '100%',
+                  maxHeight: '260px',
+                  objectFit: 'cover',
+                  borderRadius: '16px',
+                  marginBottom: '16px',
+                  border: '1px solid rgba(255, 255, 255, 0.1)'
+                }}
+              />
+            ) : (
+              <div style={styles.logoBadge}>
+                <Gift size={32} color="var(--primary)" />
+              </div>
+            )}
             <span style={isEnded ? styles.statusBadgeEnded : styles.statusBadgeActive}>
               {isEnded ? 'Ended' : 'Active Giveaway'}
             </span>
@@ -309,7 +324,7 @@ function GiveawaysContent() {
                         <div style={{ marginTop: '12px', display: 'flex', gap: '8px', width: '100%' }}>
                           <input
                             type="text"
-                            placeholder="0x..."
+                            placeholder="Enter EVM Wallet (0x...)"
                             value={localWalletInput}
                             onChange={(e) => {
                               setLocalWalletInput(e.target.value);
@@ -318,16 +333,6 @@ function GiveawaysContent() {
                             disabled={hasEntered}
                             style={styles.taskInput}
                           />
-                          {!isConnected && !hasEntered && (
-                            <button onClick={connectWallet} style={styles.taskWalletConnectBtn}>
-                              Connect
-                            </button>
-                          )}
-                          {isConnected && !hasEntered && (
-                            <button onClick={disconnectWallet} style={styles.taskWalletDisconnectBtn}>
-                              Disconnect
-                            </button>
-                          )}
                         </div>
                       </div>
                     </div>
@@ -346,18 +351,22 @@ function GiveawaysContent() {
                           target="_blank"
                           rel="noopener noreferrer"
                           style={styles.taskLink}
-                          onClick={() => handleTaskComplete(task.id, true)}
                         >
-                          Open external link <ExternalLink size={12} />
+                          Open link <ExternalLink size={12} />
                         </a>
                       )}
                     </div>
                     {!hasEntered && (
                       <button
-                        onClick={() => handleTaskComplete(task.id, !isCompleted)}
+                        onClick={() => {
+                          if (task.url && !isCompleted) {
+                            window.open(task.url, '_blank', 'noopener,noreferrer');
+                          }
+                          handleTaskComplete(task.id, !isCompleted);
+                        }}
                         style={isCompleted ? styles.taskBtnCompleted : styles.taskBtnAction}
                       >
-                        {isCompleted ? 'Done' : 'Verify'}
+                        {isCompleted ? '✓ Done' : task.url ? 'Go to Task' : 'Verify'}
                       </button>
                     )}
                   </div>

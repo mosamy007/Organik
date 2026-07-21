@@ -47,6 +47,23 @@ export async function GET(req: NextRequest) {
 
       const totalEntries = await db.collection('giveaway_entries').countDocuments({ giveawayId });
 
+      // Enrich winners with detailed objects
+      if (giveaway.winners && giveaway.winners.length > 0) {
+        const winnerEntries = await db.collection('giveaway_entries').find({
+          giveawayId: String(giveaway._id),
+          discordId: { $in: giveaway.winners }
+        }).toArray();
+        const entriesMap = new Map(winnerEntries.map(e => [e.discordId, e]));
+        giveaway.winners = giveaway.winners.map((w: string) => {
+          const entry = entriesMap.get(w);
+          return {
+            discordId: w,
+            username: entry?.discordUsername || w,
+            walletAddress: entry?.walletAddress || ''
+          };
+        });
+      }
+
       return NextResponse.json({
         giveaway,
         hasEntered,
@@ -65,6 +82,25 @@ export async function GET(req: NextRequest) {
       .find({ guildId })
       .sort({ endTime: -1 })
       .toArray();
+
+    // Enrich winners for all giveaways in the list
+    for (const gw of giveaways) {
+      if (gw.winners && gw.winners.length > 0) {
+        const winnerEntries = await db.collection('giveaway_entries').find({
+          giveawayId: String(gw._id),
+          discordId: { $in: gw.winners }
+        }).toArray();
+        const entriesMap = new Map(winnerEntries.map(e => [e.discordId, e]));
+        gw.winners = gw.winners.map((w: string) => {
+          const entry = entriesMap.get(w);
+          return {
+            discordId: w,
+            username: entry?.discordUsername || w,
+            walletAddress: entry?.walletAddress || ''
+          };
+        });
+      }
+    }
 
     return NextResponse.json({ giveaways });
   } catch (err: any) {
