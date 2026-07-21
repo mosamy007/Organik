@@ -17,6 +17,7 @@ from bson import ObjectId
 import urllib.request
 import xml.etree.ElementTree as ET
 import re
+import json
 import twikit
 
 # Initialize twikit client
@@ -338,7 +339,7 @@ async def resolve_opensea_slug(chain: str, address: str):
     return None
 
 # Twitter Polling Loop
-@tasks.loop(seconds=300)
+@tasks.loop(seconds=60)
 async def twitter_polling_loop():
     if db is None:
         return
