@@ -480,8 +480,12 @@ async def sales_polling_loop():
 
                     payment = event.get('payment', {})
                     quantity = payment.get('quantity')
-                    decimals = payment.get('decimals', 18)
-                    symbol = payment.get('symbol', 'ETH')
+                    decimals = payment.get('decimals')
+                    if decimals is None:
+                        decimals = 18
+                    symbol = payment.get('symbol')
+                    if not symbol or symbol.strip() == "":
+                        symbol = 'ETH'
 
                     price_formatted = "Unknown"
                     if quantity:
