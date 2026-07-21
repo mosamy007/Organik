@@ -11,17 +11,17 @@ export async function POST(req: NextRequest) {
     }
 
     // Clean target handle from URL or @
-    let targetHandle = targetUrl.trim();
+    let targetHandle = targetUrl.trim().replace(/\/+$/, '');
     if (targetHandle.includes('x.com/') || targetHandle.includes('twitter.com/')) {
       const parts = targetHandle.split('/');
-      targetHandle = parts[parts.length - 1] || parts[parts.length - 2];
+      targetHandle = parts[parts.length - 1];
     }
-    targetHandle = targetHandle.replace('@', '').split('?')[0];
+    targetHandle = targetHandle.replace('@', '').split('?')[0].trim();
 
     const scriptPath = path.join(process.cwd(), 'bot', 'verify_follow.py');
 
     return new Promise<NextResponse>((resolve) => {
-      execFile('python', [scriptPath, userHandle, targetHandle], { timeout: 15000 }, (error, stdout, stderr) => {
+      execFile('python', [scriptPath, userHandle, targetHandle], { timeout: 4000 }, (error, stdout, stderr) => {
         if (error) {
           console.error('[X Verify API] Python execution error:', error, stderr);
           // Fallback gracefully if python is not available on environment

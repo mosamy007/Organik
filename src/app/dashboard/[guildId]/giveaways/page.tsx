@@ -27,7 +27,13 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
   
   // Role gates
   const [rewardRoleId, setRewardRoleId] = useState('');
-  const [restrictRoleId, setRestrictRoleId] = useState(''); // Empty string = Everyone
+  const [restrictRoleIds, setRestrictRoleIds] = useState<string[]>([]); // Empty = Everyone
+
+  const toggleRestrictRole = (roleId: string) => {
+    setRestrictRoleIds((prev) =>
+      prev.includes(roleId) ? prev.filter((id) => id !== roleId) : [...prev, roleId]
+    );
+  };
 
   // Channel & Image fields
   const [channels, setChannels] = useState<any[]>([]);
@@ -198,7 +204,9 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
         winnerCount: Number(winnerCount),
         endTime: new Date(endTime).toISOString(),
         winnerRoleRewardId: rewardRoleId || null,
-        restrictRoleId: restrictRoleId || null,
+        restrictRoleId: restrictRoleIds[0] || null,
+        allowedRoles: restrictRoleIds,
+        restrictRoleIds: restrictRoleIds,
         channelId: selectedChannelId || null,
         imageUrl: imageUrl.trim() || null,
         tasks: tasks.map((t) => ({
@@ -228,7 +236,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
         setEndTime('');
         setImageUrl('');
         setRewardRoleId('');
-        setRestrictRoleId('');
+        setRestrictRoleIds([]);
         setTasks([{ id: 't1', type: 'wallet_input', label: 'Submit EVM Wallet Address', required: true }]);
         setEditingGiveawayId(null);
         // Reload giveaways
@@ -304,7 +312,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
     setEndTime('');
     setImageUrl('');
     setRewardRoleId('');
-    setRestrictRoleId('');
+    setRestrictRoleIds([]);
     setTasks([{ id: 't1', type: 'wallet_input', label: 'Submit EVM Wallet Address', required: true }]);
   };
 
@@ -327,7 +335,8 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
     setSelectedChannelId(gw.channelId || '');
     setImageUrl(gw.imageUrl || '');
     setRewardRoleId(gw.winnerRoleRewardId || '');
-    setRestrictRoleId(gw.restrictRoleId || '');
+    const rolesArray = gw.restrictRoleIds || gw.allowedRoles || (gw.restrictRoleId ? [gw.restrictRoleId] : []);
+    setRestrictRoleIds(rolesArray);
     setTasks(gw.tasks && gw.tasks.length > 0 ? gw.tasks : [{ id: 't1', type: 'wallet_input', label: 'Submit EVM Wallet Address', required: true }]);
   };
 
@@ -526,24 +535,52 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
               </div>
 
               <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">Restrict Entry To Role</label>
+                <label className="form-label">Restrict Entry To Roles (Multiple allowed)</label>
                 {loadingRoles ? (
                   <div style={styles.loadingSmall}>
                     <div className="spinner" style={{ width: '14px', height: '14px' }}></div>
                   </div>
                 ) : (
-                  <select
-                    className="form-select"
-                    value={restrictRoleId}
-                    onChange={(e) => setRestrictRoleId(e.target.value)}
-                  >
-                    <option value="">Everyone (No gate)</option>
-                    {roles.map((role) => (
-                      <option key={role.id} value={role.id}>
-                        {role.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', marginTop: '6px', maxHeight: '150px', overflowY: 'auto', padding: '4px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setRestrictRoleIds([])}
+                      style={{
+                        padding: '4px 10px',
+                        borderRadius: '16px',
+                        fontSize: '0.78rem',
+                        fontWeight: '600',
+                        cursor: 'pointer',
+                        background: restrictRoleIds.length === 0 ? 'var(--primary)' : 'rgba(255,255,255,0.05)',
+                        color: restrictRoleIds.length === 0 ? '#fff' : 'var(--text-secondary)',
+                        border: '1px solid var(--border-color)',
+                      }}
+                    >
+                      Everyone (No gate)
+                    </button>
+                    {roles.map((role) => {
+                      const isSelected = restrictRoleIds.includes(role.id);
+                      return (
+                        <button
+                          key={role.id}
+                          type="button"
+                          onClick={() => toggleRestrictRole(role.id)}
+                          style={{
+                            padding: '4px 10px',
+                            borderRadius: '16px',
+                            fontSize: '0.78rem',
+                            fontWeight: '600',
+                            cursor: 'pointer',
+                            background: isSelected ? 'rgba(139, 92, 246, 0.25)' : 'rgba(255,255,255,0.05)',
+                            color: isSelected ? '#a78bfa' : 'var(--text-secondary)',
+                            border: isSelected ? '1px solid rgba(139, 92, 246, 0.5)' : '1px solid var(--border-color)',
+                          }}
+                        >
+                          {isSelected ? '✓ ' : ''}{role.name}
+                        </button>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>
@@ -680,7 +717,11 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
                       <div style={styles.infoCol}>
                         <Trophy size={14} color="var(--text-muted)" />
                         <span style={{ fontSize: '0.85rem' }}>
-                          Gate: {getRoleName(gw.restrictRoleId)}
+                          Gate: {(() => {
+                            const gRoles = gw.allowedRoles || gw.restrictRoleIds || (gw.restrictRoleId ? [gw.restrictRoleId] : []);
+                            const roleNames = gRoles.map((rId: string) => getRoleName(rId)).filter((n: string) => n && n !== 'Everyone');
+                            return roleNames.length > 0 ? roleNames.join(', ') : 'Everyone';
+                          })()}
                         </span>
                       </div>
                     </div>

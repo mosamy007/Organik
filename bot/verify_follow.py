@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 
 bot_dir = os.path.dirname(os.path.abspath(__file__))
 load_dotenv(os.path.join(bot_dir, ".env"))
+load_dotenv(os.path.join(os.path.dirname(bot_dir), ".env"))
 
 from twikit import Client
 

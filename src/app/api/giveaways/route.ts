@@ -116,8 +116,8 @@ export async function POST(req: NextRequest) {
   const session = getSession(req);
 
   try {
-    const { guildId, title, description, prize, allowedRoles, winnerRoleRewardId, endTime, winnerCount, tasks, channelId, imageUrl } =
-      await req.json();
+    const body = await req.json();
+    const { guildId, title, description, prize, allowedRoles, restrictRoleIds, restrictRoleId, winnerRoleRewardId, endTime, winnerCount, tasks, channelId, imageUrl } = body;
 
     const actualTitle = title?.trim() || prize?.trim();
 
@@ -132,13 +132,18 @@ export async function POST(req: NextRequest) {
     }
 
     const db = await getDb();
+    const rolesList = Array.isArray(allowedRoles) && allowedRoles.length > 0 
+      ? allowedRoles 
+      : (Array.isArray(restrictRoleIds) ? restrictRoleIds : (restrictRoleId ? [restrictRoleId] : []));
     const newGiveaway: any = {
       guildId,
       title: actualTitle,
       description: description?.trim() || '',
       prize: prize.trim(),
       imageUrl: imageUrl?.trim() || null,
-      allowedRoles: Array.isArray(allowedRoles) ? allowedRoles : [],
+      allowedRoles: rolesList,
+      restrictRoleIds: rolesList,
+      restrictRoleId: rolesList[0] || body.restrictRoleId || null,
       winnerRoleRewardId: winnerRoleRewardId || null,
       endTime: new Date(endTime),
       winnerCount: Math.max(1, Number(winnerCount) || 1),
@@ -248,13 +253,23 @@ export async function PUT(req: NextRequest) {
       return NextResponse.json({ error: 'This giveaway has ended' }, { status: 400 });
     }
 
-    // Role Gating Check
-    const requiredRoleId = giveaway.restrictRoleId || (giveaway.allowedRoles && giveaway.allowedRoles[0]);
-    if (requiredRoleId) {
+    // Role Gating Check (Supports multiple roles: user needs AT LEAST ONE of the allowed roles)
+    const requiredRoleIds = giveaway.restrictRoleIds || giveaway.allowedRoles || (giveaway.restrictRoleId ? [giveaway.restrictRoleId] : []);
+    
+    if (Array.isArray(requiredRoleIds) && requiredRoleIds.length > 0) {
       const member = await getGuildMember(giveaway.guildId, session.discordId);
-      if (!member || !Array.isArray(member.roles) || !member.roles.includes(requiredRoleId)) {
+      if (!member || !Array.isArray(member.roles)) {
         return NextResponse.json({
-          error: 'You do not have the required Discord role to enter this giveaway.'
+          error: 'Could not verify Discord server membership. Please make sure you are in the Discord server.'
+        }, { status: 403 });
+      }
+
+      const userRoleIds: string[] = member.roles;
+      const hasRequiredRole = requiredRoleIds.some((rId: string) => userRoleIds.includes(rId));
+
+      if (!hasRequiredRole) {
+        return NextResponse.json({
+          error: 'You do not have any of the required Discord roles to enter this giveaway.'
         }, { status: 403 });
       }
     }
@@ -357,13 +372,16 @@ export async function PATCH(req: NextRequest) {
 
     // Handle Edit Giveaway Action
     if (action === 'edit_giveaway') {
-      const { title, description, prize, allowedRoles, winnerRoleRewardId, endTime, winnerCount, tasks, channelId, imageUrl } = body;
+      const { title, description, prize, allowedRoles, restrictRoleIds, restrictRoleId, winnerRoleRewardId, endTime, winnerCount, tasks, channelId, imageUrl } = body;
       const actualTitle = title?.trim() || prize?.trim();
 
       if (!actualTitle || !prize || !endTime || !winnerCount) {
         return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 });
       }
 
+      const rolesList = Array.isArray(allowedRoles) && allowedRoles.length > 0 
+        ? allowedRoles 
+        : (Array.isArray(restrictRoleIds) ? restrictRoleIds : (restrictRoleId ? [restrictRoleId] : []));
       await db.collection('giveaways').updateOne(
         { _id: new ObjectId(giveawayId), guildId },
         {
@@ -372,7 +390,9 @@ export async function PATCH(req: NextRequest) {
             description: description?.trim() || '',
             prize: prize.trim(),
             imageUrl: imageUrl?.trim() || null,
-            allowedRoles: Array.isArray(allowedRoles) ? allowedRoles : [],
+            allowedRoles: rolesList,
+            restrictRoleIds: rolesList,
+            restrictRoleId: rolesList[0] || body.restrictRoleId || null,
             winnerRoleRewardId: winnerRoleRewardId || null,
             endTime: new Date(endTime),
             winnerCount: Math.max(1, Number(winnerCount) || 1),
