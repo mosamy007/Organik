@@ -424,7 +424,9 @@ async def sales_polling_loop():
             guild_id = config.get("guildId")
             channel_id = config.get("sales", {}).get("channelId")
             contracts = config.get("sales", {}).get("contracts", [])
-            last_processed = config.get("sales", {}).get("lastProcessedTxHashes", [])
+            last_processed = config.get("sales", {}).get("lastProcessedTxHashes", {})
+            if isinstance(last_processed, list):
+                last_processed = {}
 
             if not channel_id or not contracts:
                 continue
@@ -466,6 +468,17 @@ async def sales_polling_loop():
                 if not events:
                     continue
 
+                if address not in last_processed:
+                    # First run: silent initialization of historical sales
+                    last_processed[address] = [
+                        f"{e.get('transaction')}:{e.get('nft', {}).get('identifier')}"
+                        for e in events if e.get('transaction') and e.get('nft', {}).get('identifier')
+                    ]
+                    db_updated = True
+                    continue
+
+                processed_keys = last_processed.get(address, [])
+
                 for event in reversed(events):
                     tx_hash = event.get('transaction')
                     nft_info = event.get('nft', {})
@@ -475,7 +488,7 @@ async def sales_polling_loop():
                         continue
 
                     sale_key = f"{tx_hash}:{token_id}"
-                    if sale_key in last_processed:
+                    if sale_key in processed_keys:
                         continue
 
                     payment = event.get('payment', {})
@@ -515,14 +528,18 @@ async def sales_polling_loop():
 
                     try:
                         await channel.send(embed=embed)
-                        last_processed.append(sale_key)
+                        processed_keys.append(sale_key)
                         db_updated = True
                     except Exception as send_err:
                         print(f"[Sales Loop] Error posting sale embed to channel {channel_id}: {send_err}")
 
+                # Cap size of processed keys for this contract
+                if address in last_processed or db_updated:
+                    if len(processed_keys) > 50:
+                        processed_keys = processed_keys[-50:]
+                    last_processed[address] = processed_keys
+
             if db_updated:
-                if len(last_processed) > 50:
-                    last_processed = last_processed[-50:]
                 db["integrations"].update_one(
                     {"guildId": guild_id},
                     {"$set": {"sales.lastProcessedTxHashes": last_processed}}
