@@ -332,12 +332,17 @@ async def twitter_polling_loop():
                 processed_ids = last_processed.get(username, [])
                 
                 # If this is the first time we poll this feed, initialize it with current tweets
-                # so we don't spam the channel with old historical tweets
+                # but send the single most recent one to confirm the connection works.
                 if not processed_ids:
-                    processed_ids = [t['id'] for t in tweets]
-                    last_processed[username] = processed_ids
-                    db_updated = True
-                    continue
+                    if tweets:
+                        processed_ids = [t['id'] for t in tweets[1:]]
+                        last_processed[username] = processed_ids
+                        db_updated = True
+                    else:
+                        processed_ids = []
+                        last_processed[username] = processed_ids
+                        db_updated = True
+                        continue
 
                 new_tweets = [t for t in tweets if t['id'] not in processed_ids]
 
