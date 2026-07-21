@@ -161,6 +161,11 @@ export async function POST(req: NextRequest) {
       try {
         const appUrl = `${new URL(req.url).origin}`;
         const giveawayUrl = `${appUrl}/giveaways?id=${result.insertedId}&guildId=${guildId}`;
+        const rolesToMention = newGiveaway.allowedRoles && newGiveaway.allowedRoles.length > 0 
+          ? newGiveaway.allowedRoles 
+          : (newGiveaway.restrictRoleId ? [newGiveaway.restrictRoleId] : []);
+        const roleMentions = rolesToMention.map((rId: string) => `<@&${rId}>`).join(' ');
+
         const embed: any = {
           title: `🎉 NEW GIVEAWAY: ${newGiveaway.prize} 🎉`,
           description: `${newGiveaway.description}\n\n**Prize:** ${newGiveaway.prize}\n**Winners:** ${newGiveaway.winnerCount}\n**Ends At:** <t:${Math.floor(newGiveaway.endTime.getTime() / 1000)}:R>`,
@@ -168,14 +173,12 @@ export async function POST(req: NextRequest) {
           url: giveawayUrl,
           fields: [
             {
-              name: 'Requirements',
-              value: newGiveaway.allowedRoles.length > 0 
-                ? `Specific roles required. Check requirements on the portal.` 
-                : 'Open to everyone!',
+              name: '🔒 Required Roles',
+              value: rolesToMention.length > 0 ? roleMentions : 'Open to everyone!',
             },
             {
               name: 'How to Enter',
-              value: `Click the "Enter Giveaway" button below, log in, complete tasks, and join!`,
+              value: `Click the "Enter Giveaway" button below, log in with Discord, complete tasks, and join!`,
             },
           ],
         };
@@ -199,7 +202,11 @@ export async function POST(req: NextRequest) {
           },
         ];
 
-        await sendChannelMessage(channelId, '', [embed], components);
+        const messageText = roleMentions 
+          ? `🎉 **NEW GIVEAWAY FOR** ${roleMentions}!` 
+          : `🎉 **NEW GIVEAWAY!**`;
+
+        await sendChannelMessage(channelId, messageText, [embed], components);
       } catch (err) {
         console.error('Failed to announce giveaway in Discord channel:', err);
       }
