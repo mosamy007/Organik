@@ -46,3 +46,5 @@ next-env.d.ts
 bot/.env
 bot/venv/
 bot/__pycache__/
+cookies.json
+bot/cookies.json

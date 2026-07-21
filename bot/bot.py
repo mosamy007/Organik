@@ -16,8 +16,11 @@ from pymongo import MongoClient
 from bson import ObjectId
 import urllib.request
 import xml.etree.ElementTree as ET
-import json
 import re
+import twikit
+
+# Initialize twikit client
+twikit_client = twikit.Client('en-US')
 
 # Load env variables
 # Load bot/.env explicitly if it exists to support running the bot from root CWD
@@ -30,6 +33,22 @@ else:
 TOKEN = os.getenv("TOKEN")
 MONGODB_URI = os.getenv("MONGODB_URI")
 APP_URL = os.getenv("APP_URL") or os.getenv("NEXT_PUBLIC_APP_URL") or "http://localhost:3000"
+
+# Set up twikit cookies
+twitter_auth_token = os.getenv("TWITTER_AUTH_TOKEN")
+twitter_ct0 = os.getenv("TWITTER_CT0")
+
+if twitter_auth_token and twitter_ct0:
+    try:
+        twikit_client.set_cookies({
+            'auth_token': twitter_auth_token.strip(),
+            'ct0': twitter_ct0.strip()
+        })
+        print("[Twitter Twikit] Loaded cookies from environment variables successfully.")
+    except Exception as cookie_err:
+        print(f"[Twitter Twikit] Error initializing cookies: {cookie_err}")
+else:
+    print("[Twitter Twikit] WARNING: TWITTER_AUTH_TOKEN or TWITTER_CT0 is not set in .env. Twikit scraper will not work.")
 
 if not TOKEN:
     print("[CRITICAL] Discord bot token is missing in .env")
@@ -249,6 +268,27 @@ def fetch_tweets_rss(source: str):
             pass
     return []
 
+# Helper to fetch Twitter tweets via Twikit (using cookie auth)
+async def fetch_tweets_twikit(username: str):
+    username = username.replace('@', '').strip()
+    if not os.getenv("TWITTER_AUTH_TOKEN") or not os.getenv("TWITTER_CT0"):
+        print("[Twitter Twikit] WARNING: Cannot query twikit. TWITTER_AUTH_TOKEN or TWITTER_CT0 is not set in .env.")
+        return []
+    try:
+        user = await twikit_client.get_user_by_screen_name(username)
+        tweets = await user.get_tweets('Tweets', count=10)
+        items = []
+        for t in tweets:
+            items.append({
+                'id': t.id,
+                'title': t.text if hasattr(t, 'text') else '',
+                'link': f"https://x.com/{username}/status/{t.id}"
+            })
+        return items
+    except Exception as e:
+        print(f"[Twitter Twikit] Error fetching tweets for {username}: {e}")
+        return []
+
 # Helper to fetch OpenSea sales
 def fetch_opensea_sales(slug: str):
     opensea_key = os.getenv("OPENSEA_API_KEY")
@@ -325,7 +365,10 @@ async def twitter_polling_loop():
 
             db_updated = False
             for username in accounts:
-                tweets = fetch_tweets_rss(username)
+                if username.startswith("http://") or username.startswith("https://"):
+                    tweets = fetch_tweets_rss(username)
+                else:
+                    tweets = await fetch_tweets_twikit(username)
                 if not tweets:
                     continue
 
