@@ -32,6 +32,48 @@ function GiveawaysContent() {
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [submitMessage, setSubmitMessage] = useState<string>('');
 
+  // X (Twitter) Task Verification state
+  const [xHandles, setXHandles] = useState<Record<string, string>>({});
+  const [xVerifying, setXVerifying] = useState<Record<string, boolean>>({});
+  const [xVerifyError, setXVerifyError] = useState<Record<string, string>>({});
+
+  const handleVerifyXFollow = async (task: any) => {
+    const handle = xHandles[task.id];
+    if (!handle || !handle.trim()) {
+      setXVerifyError((prev) => ({ ...prev, [task.id]: 'Please enter your X username (@handle).' }));
+      return;
+    }
+
+    setXVerifying((prev) => ({ ...prev, [task.id]: true }));
+    setXVerifyError((prev) => ({ ...prev, [task.id]: '' }));
+
+    try {
+      const res = await fetch('/api/verify/x-follow', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          userHandle: handle.trim(),
+          targetUrl: task.url,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok && data.verified) {
+        handleTaskComplete(task.id, true);
+        setXVerifyError((prev) => ({ ...prev, [task.id]: '' }));
+      } else {
+        setXVerifyError((prev) => ({
+          ...prev,
+          [task.id]: data.error || 'Follow verification failed. Make sure you followed the account.',
+        }));
+      }
+    } catch (err) {
+      setXVerifyError((prev) => ({ ...prev, [task.id]: 'Network error verifying X follow status.' }));
+    } finally {
+      setXVerifying((prev) => ({ ...prev, [task.id]: false }));
+    }
+  };
+
   // Auto redirect to Discord OAuth login if user is not authenticated and loading is finished
   useEffect(() => {
     if (!authLoading && !user && giveawayId) {
@@ -334,6 +376,60 @@ function GiveawaysContent() {
                             style={styles.taskInput}
                           />
                         </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                const isXTask = task.url && (task.url.includes('x.com') || task.url.includes('twitter.com'));
+
+                if (isXTask) {
+                  return (
+                    <div key={task.id} style={isCompleted ? styles.taskItemSuccess : styles.taskItemPending}>
+                      <div style={{ ...styles.taskDetails, width: '100%' }}>
+                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                          <span style={isCompleted ? styles.taskLabelSuccess : styles.taskLabel}>
+                            {isCompleted ? '✓ ' : ''}{task.label} {task.required && '*'}
+                          </span>
+                          <a
+                            href={task.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            style={styles.taskLink}
+                          >
+                            Open X Profile <ExternalLink size={12} />
+                          </a>
+                        </div>
+                        
+                        {!isCompleted && !hasEntered && (
+                          <div style={{ marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px', width: '100%' }}>
+                            <div style={{ display: 'flex', gap: '8px' }}>
+                              <input
+                                type="text"
+                                placeholder="Enter your X handle (@username)"
+                                value={xHandles[task.id] || ''}
+                                onChange={(e) => setXHandles((prev) => ({ ...prev, [task.id]: e.target.value }))}
+                                style={styles.taskInput}
+                              />
+                              <button
+                                type="button"
+                                onClick={() => handleVerifyXFollow(task)}
+                                disabled={xVerifying[task.id]}
+                                style={styles.taskBtnAction}
+                              >
+                                {xVerifying[task.id] ? 'Verifying...' : 'Verify Follow'}
+                              </button>
+                            </div>
+                            {xVerifyError[task.id] && (
+                              <span style={{ fontSize: '0.78rem', color: '#f87171', marginTop: '2px', fontWeight: '600' }}>
+                                ⚠️ {xVerifyError[task.id]}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {isCompleted && (
+                          <span style={styles.taskSubSuccess}>Follow verified on X</span>
+                        )}
                       </div>
                     </div>
                   );

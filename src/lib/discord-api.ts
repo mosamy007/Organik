@@ -262,3 +262,22 @@ export async function sendChannelMessage(
   const msg = await res.json();
   return { success: true, messageId: msg.id };
 }
+
+/**
+ * Fetches member details (including assigned role IDs) for a user in a specific guild using Bot Token.
+ */
+export async function getGuildMember(guildId: string, userId: string): Promise<any | null> {
+  if (!BOT_TOKEN) return null;
+
+  const res = await fetch(`${API_ENDPOINT}/guilds/${guildId}/members/${userId}`, {
+    headers: {
+      Authorization: `Bot ${BOT_TOKEN}`,
+    },
+  });
+
+  if (!res.ok) {
+    return null;
+  }
+
+  return res.json();
+}

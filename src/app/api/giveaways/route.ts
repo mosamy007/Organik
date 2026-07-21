@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDb } from '@/lib/mongodb';
 import { getSession } from '@/lib/session';
 import { verifyGuildAdmin } from '@/lib/auth-helpers';
-import { assignGuildRole, sendChannelMessage } from '@/lib/discord-api';
+import { assignGuildRole, sendChannelMessage, getGuildMember } from '@/lib/discord-api';
 import { ObjectId } from 'mongodb';
 
 /**
@@ -47,19 +47,19 @@ export async function GET(req: NextRequest) {
 
       const totalEntries = await db.collection('giveaway_entries').countDocuments({ giveawayId });
 
-      // Enrich winners with detailed objects
+      // Enrich winners with detailed objects safely
       if (giveaway.winners && giveaway.winners.length > 0) {
         const winnerEntries = await db.collection('giveaway_entries').find({
-          giveawayId: String(giveaway._id),
-          discordId: { $in: giveaway.winners }
+          giveawayId: String(giveaway._id)
         }).toArray();
         const entriesMap = new Map(winnerEntries.map(e => [e.discordId, e]));
-        giveaway.winners = giveaway.winners.map((w: string) => {
-          const entry = entriesMap.get(w);
+        giveaway.winners = giveaway.winners.map((w: any) => {
+          const discordId = typeof w === 'object' && w !== null ? (w.discordId || String(w)) : String(w);
+          const entry = entriesMap.get(discordId);
           return {
-            discordId: w,
-            username: entry?.discordUsername || w,
-            walletAddress: entry?.walletAddress || ''
+            discordId,
+            username: entry?.discordUsername || (typeof w === 'object' && w?.username ? w.username : discordId),
+            walletAddress: entry?.walletAddress || (typeof w === 'object' && w?.walletAddress ? w.walletAddress : '')
           };
         });
       }
@@ -83,20 +83,20 @@ export async function GET(req: NextRequest) {
       .sort({ endTime: -1 })
       .toArray();
 
-    // Enrich winners for all giveaways in the list
+    // Enrich winners for all giveaways in the list safely
     for (const gw of giveaways) {
       if (gw.winners && gw.winners.length > 0) {
         const winnerEntries = await db.collection('giveaway_entries').find({
-          giveawayId: String(gw._id),
-          discordId: { $in: gw.winners }
+          giveawayId: String(gw._id)
         }).toArray();
         const entriesMap = new Map(winnerEntries.map(e => [e.discordId, e]));
-        gw.winners = gw.winners.map((w: string) => {
-          const entry = entriesMap.get(w);
+        gw.winners = gw.winners.map((w: any) => {
+          const discordId = typeof w === 'object' && w !== null ? (w.discordId || String(w)) : String(w);
+          const entry = entriesMap.get(discordId);
           return {
-            discordId: w,
-            username: entry?.discordUsername || w,
-            walletAddress: entry?.walletAddress || ''
+            discordId,
+            username: entry?.discordUsername || (typeof w === 'object' && w?.username ? w.username : discordId),
+            walletAddress: entry?.walletAddress || (typeof w === 'object' && w?.walletAddress ? w.walletAddress : '')
           };
         });
       }
@@ -246,6 +246,17 @@ export async function PUT(req: NextRequest) {
 
     if (giveaway.status !== 'active' || new Date() > new Date(giveaway.endTime)) {
       return NextResponse.json({ error: 'This giveaway has ended' }, { status: 400 });
+    }
+
+    // Role Gating Check
+    const requiredRoleId = giveaway.restrictRoleId || (giveaway.allowedRoles && giveaway.allowedRoles[0]);
+    if (requiredRoleId) {
+      const member = await getGuildMember(giveaway.guildId, session.discordId);
+      if (!member || !Array.isArray(member.roles) || !member.roles.includes(requiredRoleId)) {
+        return NextResponse.json({
+          error: 'You do not have the required Discord role to enter this giveaway.'
+        }, { status: 403 });
+      }
     }
 
     // 2. Validate tasks
