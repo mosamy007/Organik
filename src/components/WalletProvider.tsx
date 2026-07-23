@@ -11,8 +11,8 @@ const projectId = '0ca551c7155e1a102ed9c2acdd2fede4';
 const metadata = {
   name: 'Organik Bot',
   description: 'Web3 role verification and giveaways dashboard for Discord',
-  url: typeof window !== 'undefined' ? window.location.origin : 'https://organik-zeta.vercel.app',
-  icons: ['https://organik-zeta.vercel.app/favicon.ico'],
+  url: typeof window !== 'undefined' ? window.location.origin : 'https://www.organikbot.com',
+  icons: ['https://www.organikbot.com/favicon.ico'],
 };
 
 let appKitInstance: any = null;
