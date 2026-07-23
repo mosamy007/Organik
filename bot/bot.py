@@ -509,9 +509,17 @@ async def sales_polling_loop():
                             pass
 
                     nft_name = nft_info.get('name') or f"{name} #{token_id}"
-                    image_url = nft_info.get('image_url')
+                    # Prefer display_image_url over image_url — it's always a resolved CDN link (never IPFS)
+                    image_url = nft_info.get('display_image_url') or nft_info.get('image_url')
                     opensea_url = nft_info.get('opensea_url') or f"https://opensea.io/assets/{chain}/{address}/{token_id}"
                     explorer_url = f"https://basescan.org/tx/{tx_hash}" if chain == "base" else f"https://etherscan.io/tx/{tx_hash}"
+
+                    seller = event.get('seller', '')
+                    buyer = event.get('buyer', '')
+                    seller_short = f"{seller[:6]}...{seller[-4:]}" if seller and len(seller) >= 10 else seller or "Unknown"
+                    buyer_short = f"{buyer[:6]}...{buyer[-4:]}" if buyer and len(buyer) >= 10 else buyer or "Unknown"
+                    seller_link = f"[{seller_short}](https://opensea.io/{seller})" if seller else "Unknown"
+                    buyer_link = f"[{buyer_short}](https://opensea.io/{buyer})" if buyer else "Unknown"
 
                     embed = discord.Embed(
                         title="🎉 New NFT Sale!",
@@ -519,12 +527,15 @@ async def sales_polling_loop():
                         color=0x06b6d4,
                         url=opensea_url
                     )
-                    embed.add_field(name="Price", value=f"💰 {price_formatted} {symbol}", inline=True)
-                    embed.add_field(name="Blockchain", value=f"⛓️ {chain.capitalize()}", inline=True)
-                    embed.add_field(name="Transaction", value=f"🔗 [View Tx]({explorer_url})", inline=True)
-                    
+                    embed.add_field(name="💰 Price", value=f"{price_formatted} {symbol}", inline=True)
+                    embed.add_field(name="⛓️ Chain", value=chain.capitalize(), inline=True)
+                    embed.add_field(name="🔗 Transaction", value=f"[View Tx]({explorer_url})", inline=True)
+                    embed.add_field(name="🏷️ Seller", value=seller_link, inline=True)
+                    embed.add_field(name="🛒 Buyer", value=buyer_link, inline=True)
+
                     if image_url:
                         embed.set_image(url=image_url)
+                    embed.set_footer(text=f"Collection: {name}")
 
                     try:
                         await channel.send(embed=embed)
