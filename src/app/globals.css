@@ -446,9 +446,123 @@ a:hover {
     gap: 4px;
   }
 
-  /* Sidebar nav links: icon-only on phones */
+/* Sidebar nav links: icon-only on phones */
   .sidebar-nav a span.nav-label {
     display: none;
   }
 }
+
+/* =============================================
+   PAGE LAYOUT UTILITY CLASSES
+   Used across dashboard pages to be mobile-overridable
+   ============================================= */
+
+/* Two-column layout: editor + preview side by side */
+.page-two-col {
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+  gap: 30px;
+  align-items: start;
+}
+
+/* Unstick preview panel on mobile */
+.preview-panel-sticky {
+  position: sticky;
+  top: 110px;
+}
+
+/* Inline form row (two fields side by side) */
+.form-row-inline {
+  display: flex;
+  gap: 16px;
+}
+
+/* Page header row */
+.page-header {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  padding-bottom: 20px;
+}
+
+/* Page title */
+.page-title {
+  font-size: 1.75rem;
+  font-weight: 800;
+}
+
+/* Page subtitle */
+.page-subtitle {
+  color: var(--text-secondary);
+  font-size: 0.95rem;
+}
+
+@media (max-width: 820px) {
+  /* Send Message: stack editor above preview */
+  .page-two-col {
+    grid-template-columns: 1fr;
+    gap: 20px;
+  }
+
+  /* Unpin preview panel — let it flow naturally */
+  .preview-panel-sticky {
+    position: static;
+  }
+
+  /* Reorder: form first, preview second (default order is fine) */
+}
+
+@media (max-width: 640px) {
+  /* Inline form rows (e.g. Title + Color, Thumbnail + Image) → stack */
+  .form-row-inline {
+    flex-direction: column;
+    gap: 0;
+  }
+
+  /* Page headers: tighter on mobile */
+  .page-header {
+    padding-bottom: 14px;
+    gap: 12px;
+  }
+
+  .page-title {
+    font-size: 1.35rem;
+  }
+
+  .page-subtitle {
+    font-size: 0.85rem;
+  }
+
+  /* Icon circle smaller on mobile */
+  .page-icon-circle {
+    width: 42px !important;
+    height: 42px !important;
+    border-radius: 10px !important;
+    flex-shrink: 0;
+  }
+
+  /* Action buttons row: stack on mobile */
+  .actions-row {
+    flex-direction: column !important;
+    gap: 8px !important;
+  }
+  .actions-row > * {
+    width: 100% !important;
+  }
+
+  /* Input + Add button rows: button goes full width below */
+  .form-row-inline > button {
+    width: auto;
+  }
+}
+
+/* Extra: make contract address text truncate nicely on mobile */
+@media (max-width: 480px) {
+  code {
+    word-break: break-all;
+    font-size: 0.78rem;
+  }
+}
+
 

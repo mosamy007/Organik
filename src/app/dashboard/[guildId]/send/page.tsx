@@ -135,17 +135,17 @@ export default function SendMessagePage({ params }: PageProps) {
 
   return (
     <div style={styles.container} className="animate-fade-in">
-      <div style={styles.header}>
-        <div style={styles.iconCircle}>
+      <div className="page-header">
+        <div style={styles.iconCircle} className="page-icon-circle">
           <MessageSquare size={24} color="var(--primary)" />
         </div>
         <div>
-          <h1 style={styles.title}>Send Message</h1>
-          <p style={styles.subtitle}>Send text announcements or rich embeds directly to your server channels.</p>
+          <h1 className="page-title">Send Message</h1>
+          <p className="page-subtitle">Send text announcements or rich embeds directly to your server channels.</p>
         </div>
       </div>
 
-      <div style={styles.layout}>
+      <div className="page-two-col">
         {/* Editor Form */}
         <div className="glass-card" style={styles.editorCard}>
           <div className="form-group">
@@ -203,7 +203,7 @@ export default function SendMessagePage({ params }: PageProps) {
           {/* Embed Editor */}
           {msgMode === 'embed' && (
             <div style={styles.embedForm} className="animate-fade-in">
-              <div style={styles.formRow}>
+              <div className="form-row-inline">
                 <div className="form-group" style={{ flex: 2 }}>
                   <label className="form-label">Embed Title</label>
                   <input
@@ -247,7 +247,7 @@ export default function SendMessagePage({ params }: PageProps) {
                 />
               </div>
 
-              <div style={styles.formRow}>
+              <div className="form-row-inline">
                 <div className="form-group" style={{ flex: 1 }}>
                   <label className="form-label">Thumbnail URL</label>
                   <input
@@ -317,7 +317,7 @@ export default function SendMessagePage({ params }: PageProps) {
         </div>
 
         {/* Discord Preview Panel */}
-        <div style={styles.previewPanel}>
+        <div style={styles.previewPanel} className="preview-panel-sticky">
           <div style={styles.previewTitle}>
             <Sparkles size={14} color="var(--primary)" />
             <span>Instant Discord Preview</span>
@@ -501,8 +501,6 @@ const styles: Record<string, React.CSSProperties> = {
     display: 'flex',
     flexDirection: 'column',
     gap: '12px',
-    position: 'sticky',
-    top: '110px',
   },
   previewTitle: {
     display: 'flex',

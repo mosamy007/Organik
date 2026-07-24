@@ -194,8 +194,8 @@ export default function IntegrationsPage({ params }: PageProps) {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <h1 style={styles.title}>Server Integrations</h1>
-        <p style={styles.description}>
+        <h1 className="page-title">Server Integrations</h1>
+        <p className="page-subtitle">
           Automate announcements in your Discord server. Monitored Twitter/X posts and real-time NFT sales alerts.
         </p>
       </div>
@@ -248,8 +248,8 @@ export default function IntegrationsPage({ params }: PageProps) {
               <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', marginBottom: '8px', marginTop: '-4px' }}>
                 Enter a Twitter username (e.g. <code>organik_concepts</code>) or paste a direct RSS Feed URL (e.g. from <code>RSS.app</code> or <code>FetchRSS</code>) for 100% reliability.
               </p>
-              <div style={styles.inputRow}>
-                <div style={styles.handleInputContainer}>
+              <div className="form-row-inline" style={{ marginBottom: '16px' }}>
+                <div style={{ flex: 1 }}>
                   <input 
                     type="text" 
                     className="form-input" 
@@ -258,7 +258,7 @@ export default function IntegrationsPage({ params }: PageProps) {
                     onChange={(e) => setNewTwitterInput(e.target.value)}
                     onKeyDown={(e) => e.key === 'Enter' && handleAddTwitter()}
                     disabled={!twitterEnabled}
-                    style={{ paddingLeft: '12px' }}
+                    style={{ paddingLeft: '12px', width: '100%' }}
                   />
                 </div>
                 <button 
@@ -346,7 +346,7 @@ export default function IntegrationsPage({ params }: PageProps) {
                   />
                 </div>
                 
-                <div style={styles.row}>
+                <div className="form-row-inline">
                   <div className="form-group" style={{ flex: 1 }}>
                     <input 
                       type="text" 
@@ -368,7 +368,7 @@ export default function IntegrationsPage({ params }: PageProps) {
                       <option value="base">Base</option>
                     </select>
                   </div>
-                </div>
+                  </div>
 
                 <button 
                   className="btn btn-secondary" 
@@ -422,12 +422,12 @@ export default function IntegrationsPage({ params }: PageProps) {
         </div>
       </div>
 
-      <div style={styles.actions}>
+      <div style={styles.actions} className="actions-row">
         <button 
           className="btn btn-primary" 
           onClick={handleSaveSettings}
           disabled={submitting}
-          style={{ width: '220px', gap: '8px' }}
+          style={{ minWidth: '180px', gap: '8px' }}
         >
           {submitting ? <Loader2 className="spinner" size={18} /> : <Save size={18} />}
           {submitting ? 'Saving...' : 'Save Integrations'}
@@ -476,7 +476,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   grid: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(auto-fit, minmax(500px, 1fr))',
+    gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
     gap: '24px',
     marginBottom: '30px',
   },

@@ -390,17 +390,17 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
   return (
     <div style={styles.container} className="animate-fade-in">
       {/* Page Header */}
-      <div style={styles.header}>
-        <div style={styles.iconCircle}>
+      <div className="page-header">
+        <div style={styles.iconCircle} className="page-icon-circle">
           <Gift size={24} color="var(--primary)" />
         </div>
         <div>
-          <h1 style={styles.title}>Web3 Giveaway Manager</h1>
-          <p style={styles.subtitle}>Configure custom server giveaways featuring entry role gates and task list verifications.</p>
+          <h1 className="page-title">Web3 Giveaway Manager</h1>
+          <p className="page-subtitle">Configure custom server giveaways featuring entry role gates and task list verifications.</p>
         </div>
       </div>
 
-      <div style={styles.layout}>
+      <div className="page-two-col">
         {/* Creation Card */}
         <div className="glass-card" style={styles.formCard}>
           <h2 style={{ fontSize: '1.25rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -431,7 +431,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
               />
             </div>
 
-            <div style={styles.formRow}>
+            <div className="form-row-inline">
               <div className="form-group" style={{ flex: 1 }}>
                 <label className="form-label">Announcement Channel</label>
                 {loadingChannels ? (
@@ -466,7 +466,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
               </div>
             </div>
 
-            <div style={styles.formRow}>
+            <div className="form-row-inline">
               <div className="form-group" style={{ flex: 1 }}>
                 <label className="form-label">Winner Count</label>
                 <input
@@ -511,7 +511,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
               </div>
             </div>
 
-            <div style={styles.formRow}>
+            <div className="form-row-inline">
               <div className="form-group" style={{ flex: 1 }}>
                 <label className="form-label">Target Role to Award (Optional)</label>
                 {loadingRoles ? (

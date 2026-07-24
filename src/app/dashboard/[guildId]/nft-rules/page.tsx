@@ -324,17 +324,17 @@ export default function NftRulesPage({ params }: PageProps) {
   return (
     <div style={styles.container} className="animate-fade-in">
       {/* Page Header */}
-      <div style={styles.header}>
-        <div style={styles.iconCircle}>
+      <div className="page-header">
+        <div style={styles.iconCircle} className="page-icon-circle">
           <Shield size={24} color="var(--primary)" />
         </div>
         <div>
-          <h1 style={styles.title}>NFT Role Verification Setup</h1>
-          <p style={styles.subtitle}>Configure token-gated access roles based on NFT quantity or trait holdings.</p>
+          <h1 className="page-title">NFT Role Verification Setup</h1>
+          <p className="page-subtitle">Configure token-gated access roles based on NFT quantity or trait holdings.</p>
         </div>
       </div>
 
-      <div style={styles.layout}>
+      <div className="page-two-col">
         {/* Creation Card */}
         <div className="glass-card" style={styles.formCard}>
           <h2 style={{ fontSize: '1.25rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
@@ -359,7 +359,7 @@ export default function NftRulesPage({ params }: PageProps) {
               />
             </div>
 
-            <div style={styles.formRow}>
+            <div className="form-row-inline">
               <div className="form-group" style={{ flex: 1 }}>
                 <label className="form-label">Blockchain Network</label>
                 <select
@@ -488,7 +488,7 @@ export default function NftRulesPage({ params }: PageProps) {
                 )}
 
                 {Object.keys(fetchedTraits).length > 0 && !isManualTraitInput ? (
-                  <div style={styles.formRow}>
+                  <div className="form-row-inline">
                     <div className="form-group" style={{ flex: 1 }}>
                       <label className="form-label">Trait Type (Attribute Name)</label>
                       <select
@@ -526,7 +526,7 @@ export default function NftRulesPage({ params }: PageProps) {
                     </div>
                   </div>
                 ) : (
-                  <div style={styles.formRow}>
+                  <div className="form-row-inline">
                     <div className="form-group" style={{ flex: 1 }}>
                       <label className="form-label">Trait Type (Attribute Name)</label>
                       <input
