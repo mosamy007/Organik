@@ -97,7 +97,7 @@ export default function GuildDashboardLayout({ children, params }: LayoutProps) 
       {/* Sidebar */}
       <aside className="sidebar">
         {/* Guild Header */}
-        <div style={styles.guildHeader}>
+        <div className="sidebar-guild-header" style={styles.guildHeader}>
           <img src={getGuildIconUrl(guildInfo)} alt={guildInfo.name} style={styles.guildIcon} />
           <div style={styles.guildMeta}>
             <h4 style={styles.guildName}>{guildInfo.name}</h4>
@@ -109,42 +109,42 @@ export default function GuildDashboardLayout({ children, params }: LayoutProps) 
         </div>
 
         {/* Navigation */}
-        <nav style={styles.sideNav}>
+        <nav className="sidebar-nav" style={styles.sideNav}>
           <Link
             href={`/dashboard/${guildId}/send`}
             style={pathname.endsWith('/send') ? styles.activeNavLink : styles.navLink}
           >
             <MessageSquare size={18} />
-            <span>Send Message</span>
+            <span className="nav-label">Send Message</span>
           </Link>
           <Link
             href={`/dashboard/${guildId}/nft-rules`}
             style={pathname.endsWith('/nft-rules') ? styles.activeNavLink : styles.navLink}
           >
             <Shield size={18} />
-            <span>NFT Verification</span>
+            <span className="nav-label">NFT Verification</span>
           </Link>
           <Link
             href={`/dashboard/${guildId}/giveaways`}
             style={pathname.endsWith('/giveaways') ? styles.activeNavLink : styles.navLink}
           >
             <Gift size={18} />
-            <span>Giveaways</span>
+            <span className="nav-label">Giveaways</span>
           </Link>
           <Link
             href={`/dashboard/${guildId}/integrations`}
             style={pathname.endsWith('/integrations') ? styles.activeNavLink : styles.navLink}
           >
             <Share2 size={18} />
-            <span>Integrations</span>
+            <span className="nav-label">Integrations</span>
           </Link>
         </nav>
 
         {/* Back Link */}
-        <div style={styles.backWrapper}>
+        <div className="sidebar-back" style={styles.backWrapper}>
           <Link href="/dashboard" style={styles.backLink}>
             <ArrowLeft size={16} />
-            <span>Change Server</span>
+            <span className="nav-label">Change Server</span>
           </Link>
         </div>
       </aside>
