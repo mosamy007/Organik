@@ -313,6 +313,9 @@ def fetch_opensea_sales(slug: str):
         print(f"[OpenSea API] Error fetching sales for slug {slug}: {e}")
     return []
 
+# Cache for collection images to avoid unnecessary API requests
+collection_image_cache = {}
+
 # Helper: fetch full NFT metadata to get the image URL
 # The events stub often omits display_image_url for on-chain NFTs.
 def fetch_nft_image(chain: str, contract_address: str, token_id: str) -> str:
@@ -342,6 +345,36 @@ def fetch_nft_image(chain: str, contract_address: str, token_id: str) -> str:
             return img
     except Exception as e:
         print(f"[OpenSea NFT] Error fetching NFT image for {contract_address}/{token_id}: {e}")
+    return ""
+
+def fetch_opensea_collection_image(slug: str) -> str:
+    """Fetch collection logo image (PNG/JPG) as fallback for SVG or missing NFT images."""
+    if not slug:
+        return ""
+    if slug in collection_image_cache:
+        return collection_image_cache[slug]
+    
+    opensea_key = os.getenv("OPENSEA_API_KEY")
+    if not opensea_key:
+        return ""
+    url = f"https://api.opensea.io/api/v2/collections/{slug}"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                'x-api-key': opensea_key,
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0'
+            }
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            img = data.get('image_url') or data.get('banner_image_url') or ""
+            if img:
+                collection_image_cache[slug] = img
+            return img
+    except Exception as e:
+        print(f"[OpenSea Collection] Error fetching collection image for {slug}: {e}")
     return ""
 
 # Helper to resolve OpenSea slug from contract address
@@ -546,14 +579,26 @@ async def sales_polling_loop():
                     if image_url.startswith('ipfs://'):
                         cid = image_url.replace('ipfs://', '')
                         image_url = f"https://ipfs.io/ipfs/{cid}"
-                    # Fallback: fetch full NFT metadata if the event stub had no image
-                    if not image_url:
+                    
+                    def _is_svg(u: str) -> bool:
+                        return bool(u and u.split('?')[0].lower().endswith('.svg'))
+
+                    # If missing or SVG (Discord cannot render SVG in embeds), fetch via full NFT endpoint
+                    if not image_url or _is_svg(image_url):
                         fetched_img = fetch_nft_image(chain, address, token_id)
-                        if fetched_img:
+                        if fetched_img and not _is_svg(fetched_img):
                             image_url = fetched_img
-                            print(f"[Sales Loop] Fetched image via NFT endpoint for {address}/{token_id}")
+                            print(f"[Sales Loop] Fetched PNG image via NFT endpoint for {address}/{token_id}")
+                    
+                    # If STILL missing or SVG, fallback to Collection logo image (PNG)
+                    if not image_url or _is_svg(image_url):
+                        coll_img = fetch_opensea_collection_image(slug)
+                        if coll_img and not _is_svg(coll_img):
+                            image_url = coll_img
+                            print(f"[Sales Loop] Fallback to Collection PNG logo for {slug}")
                         else:
-                            print(f"[Sales Loop] No image found for {address}/{token_id} — sending without image")
+                            image_url = ''
+                            print(f"[Sales Loop] No usable PNG image found for {address}/{token_id}")
                     opensea_url = nft_info.get('opensea_url') or f"https://opensea.io/assets/{chain}/{address}/{token_id}"
                     explorer_url = f"https://basescan.org/tx/{tx_hash}" if chain == "base" else f"https://etherscan.io/tx/{tx_hash}"
 
