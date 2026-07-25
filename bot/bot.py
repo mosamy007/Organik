@@ -15,6 +15,7 @@ from discord import app_commands
 from pymongo import MongoClient
 from bson import ObjectId
 import urllib.request
+import urllib.parse
 import xml.etree.ElementTree as ET
 import re
 import json
@@ -573,32 +574,41 @@ async def sales_polling_loop():
                             pass
 
                     nft_name = nft_info.get('name') or f"{name} #{token_id}"
-                    # Prefer display_image_url over image_url — it's always a resolved CDN link (never IPFS)
-                    image_url = nft_info.get('display_image_url') or nft_info.get('image_url') or ''
-                    # Handle IPFS URIs from the event stub
-                    if image_url.startswith('ipfs://'):
-                        cid = image_url.replace('ipfs://', '')
-                        image_url = f"https://ipfs.io/ipfs/{cid}"
                     
                     def _is_svg(u: str) -> bool:
                         return bool(u and u.split('?')[0].lower().endswith('.svg'))
 
-                    # If missing or SVG (Discord cannot render SVG in embeds), fetch via full NFT endpoint
-                    if not image_url or _is_svg(image_url):
-                        fetched_img = fetch_nft_image(chain, address, token_id)
-                        if fetched_img and not _is_svg(fetched_img):
-                            image_url = fetched_img
-                            print(f"[Sales Loop] Fetched PNG image via NFT endpoint for {address}/{token_id}")
+                    def process_image_url(u: str) -> str:
+                        if not u:
+                            return ""
+                        if u.startswith('ipfs://'):
+                            cid = u.replace('ipfs://', '')
+                            u = f"https://ipfs.io/ipfs/{cid}"
+                        if _is_svg(u):
+                            # Convert SVG to PNG on-the-fly via wsrv.nl CDN proxy so Discord embeds the exact sold NFT image
+                            return f"https://wsrv.nl/?url={urllib.parse.quote(u)}&output=png"
+                        return u
+
+                    # 1. Try image from sale event stub
+                    raw_img = nft_info.get('display_image_url') or nft_info.get('image_url') or ''
                     
-                    # If STILL missing or SVG, fallback to Collection logo image (PNG)
-                    if not image_url or _is_svg(image_url):
+                    # 2. If missing, fetch from full OpenSea NFT endpoint
+                    if not raw_img:
+                        raw_img = fetch_nft_image(chain, address, token_id)
+                        if raw_img:
+                            print(f"[Sales Loop] Fetched image via NFT endpoint for {address}/{token_id}")
+
+                    # 3. Process raw image (converts IPFS and SVGs to Discord-compatible PNG)
+                    image_url = process_image_url(raw_img)
+
+                    # 4. If STILL no image, fallback to collection logo image (PNG)
+                    if not image_url:
                         coll_img = fetch_opensea_collection_image(slug)
-                        if coll_img and not _is_svg(coll_img):
-                            image_url = coll_img
-                            print(f"[Sales Loop] Fallback to Collection PNG logo for {slug}")
+                        if coll_img:
+                            image_url = process_image_url(coll_img)
+                            print(f"[Sales Loop] Fallback to Collection logo image for {slug}")
                         else:
-                            image_url = ''
-                            print(f"[Sales Loop] No usable PNG image found for {address}/{token_id}")
+                            print(f"[Sales Loop] No image available for {address}/{token_id}")
                     opensea_url = nft_info.get('opensea_url') or f"https://opensea.io/assets/{chain}/{address}/{token_id}"
                     explorer_url = f"https://basescan.org/tx/{tx_hash}" if chain == "base" else f"https://etherscan.io/tx/{tx_hash}"
 
