@@ -313,6 +313,37 @@ def fetch_opensea_sales(slug: str):
         print(f"[OpenSea API] Error fetching sales for slug {slug}: {e}")
     return []
 
+# Helper: fetch full NFT metadata to get the image URL
+# The events stub often omits display_image_url for on-chain NFTs.
+def fetch_nft_image(chain: str, contract_address: str, token_id: str) -> str:
+    """Return the best available image URL for an NFT, or empty string."""
+    opensea_key = os.getenv("OPENSEA_API_KEY")
+    if not opensea_key:
+        return ""
+    url = f"https://api.opensea.io/api/v2/chain/{chain}/contract/{contract_address}/nfts/{token_id}"
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={
+                'x-api-key': opensea_key,
+                'Accept': 'application/json',
+                'User-Agent': 'Mozilla/5.0'
+            }
+        )
+        with urllib.request.urlopen(req, timeout=10) as response:
+            data = json.loads(response.read().decode('utf-8'))
+            nft = data.get('nft', {})
+            # Prefer display_image_url (always HTTPS CDN), fall back to image_url
+            img = nft.get('display_image_url') or nft.get('image_url') or ""
+            if img and img.startswith('ipfs://'):
+                # Convert IPFS URI to HTTP gateway URL
+                cid = img.replace('ipfs://', '')
+                img = f"https://ipfs.io/ipfs/{cid}"
+            return img
+    except Exception as e:
+        print(f"[OpenSea NFT] Error fetching NFT image for {contract_address}/{token_id}: {e}")
+    return ""
+
 # Helper to resolve OpenSea slug from contract address
 async def resolve_opensea_slug(chain: str, address: str):
     opensea_key = os.getenv("OPENSEA_API_KEY")
@@ -510,7 +541,19 @@ async def sales_polling_loop():
 
                     nft_name = nft_info.get('name') or f"{name} #{token_id}"
                     # Prefer display_image_url over image_url — it's always a resolved CDN link (never IPFS)
-                    image_url = nft_info.get('display_image_url') or nft_info.get('image_url')
+                    image_url = nft_info.get('display_image_url') or nft_info.get('image_url') or ''
+                    # Handle IPFS URIs from the event stub
+                    if image_url.startswith('ipfs://'):
+                        cid = image_url.replace('ipfs://', '')
+                        image_url = f"https://ipfs.io/ipfs/{cid}"
+                    # Fallback: fetch full NFT metadata if the event stub had no image
+                    if not image_url:
+                        fetched_img = fetch_nft_image(chain, address, token_id)
+                        if fetched_img:
+                            image_url = fetched_img
+                            print(f"[Sales Loop] Fetched image via NFT endpoint for {address}/{token_id}")
+                        else:
+                            print(f"[Sales Loop] No image found for {address}/{token_id} — sending without image")
                     opensea_url = nft_info.get('opensea_url') or f"https://opensea.io/assets/{chain}/{address}/{token_id}"
                     explorer_url = f"https://basescan.org/tx/{tx_hash}" if chain == "base" else f"https://etherscan.io/tx/{tx_hash}"
 
