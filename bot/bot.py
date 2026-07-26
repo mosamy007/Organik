@@ -1,6 +1,7 @@
 import os
 import sys
 import io
+import asyncio
 from dotenv import load_dotenv
 
 # Force UTF-8 encoding for standard output/error to prevent UnicodeEncodeErrors on Windows
@@ -912,6 +913,123 @@ async def on_app_command_error(interaction: discord.Interaction, error: app_comm
         )
     else:
         print(f"Unhandled Command Error: {error}")
+
+# Support Tickets Interaction Listener
+@bot.event
+async def on_interaction(interaction: discord.Interaction):
+    if interaction.type != discord.InteractionType.component:
+        return
+
+    custom_id = interaction.data.get("custom_id", "")
+
+    # 1. Handle Ticket Creation Panel button ("ticket_open")
+    if custom_id == "ticket_open":
+        await interaction.response.defer(ephemeral=True)
+        guild = interaction.guild
+        user = interaction.user
+
+        if not guild or not user:
+            await interaction.followup.send("❌ Error: Ticket system must be used inside a server.", ephemeral=True)
+            return
+
+        guild_id = str(guild.id)
+        user_id = str(user.id)
+        clean_user_name = re.sub(r'[^a-zA-Z0-9]', '', user.name).lower()[:15] or "user"
+        channel_name = f"ticket-{clean_user_name}"
+
+        # Check if user already has an active ticket channel in this guild
+        existing_channel = discord.utils.get(guild.text_channels, name=channel_name)
+        if existing_channel:
+            await interaction.followup.send(
+                f"⚠️ You already have an open support ticket: {existing_channel.mention}",
+                ephemeral=True
+            )
+            return
+
+        # Fetch tickets config from MongoDB
+        tickets_cfg = None
+        if db is not None:
+            try:
+                tickets_cfg = db["tickets_config"].find_one({"guildId": guild_id})
+            except Exception as e:
+                print(f"[Tickets] Mongo lookup error: {e}")
+
+        staff_role_ids = tickets_cfg.get("staffRoleIds", []) if tickets_cfg else []
+
+        # Build Permission Overwrites
+        overwrites = {
+            guild.default_role: discord.PermissionOverwrite(read_messages=False, view_channel=False),
+            user: discord.PermissionOverwrite(read_messages=True, view_channel=True, send_messages=True, attach_files=True, read_message_history=True),
+            guild.me: discord.PermissionOverwrite(read_messages=True, view_channel=True, send_messages=True, manage_channels=True, manage_roles=True)
+        }
+
+        # Add Staff Roles overwrites
+        for role_id in staff_role_ids:
+            role = guild.get_role(int(role_id)) if str(role_id).isdigit() else None
+            if role:
+                overwrites[role] = discord.PermissionOverwrite(
+                    read_messages=True, view_channel=True, send_messages=True, attach_files=True, read_message_history=True, manage_channels=True
+                )
+
+        try:
+            # Create channel
+            new_channel = await guild.create_text_channel(
+                name=channel_name,
+                overwrites=overwrites,
+                topic=f"Support Ticket for {user.name} ({user_id})",
+                reason=f"Support Ticket created by {user.name}"
+            )
+
+            # Send welcome embed inside ticket channel with Action Buttons
+            embed = discord.Embed(
+                title=f"🎟️ Support Ticket — {user.name}",
+                description=f"Welcome {user.mention}! Support staff have been notified.\n\nPlease describe your issue or question below.",
+                color=0x5865f2
+            )
+            embed.add_field(name="👤 Ticket Creator", value=user.mention, inline=True)
+            embed.add_field(name="📌 Status", value="`Open`", inline=True)
+            embed.set_footer(text="Organik Bot Support System • Click buttons below to manage ticket.")
+
+            # Construct View with Claim & Close buttons
+            view = discord.ui.View(timeout=None)
+            view.add_item(discord.ui.Button(label="Claim Ticket", style=discord.ButtonStyle.secondary, emoji="📋", custom_id="ticket_claim"))
+            view.add_item(discord.ui.Button(label="Close Ticket", style=discord.ButtonStyle.danger, emoji="🔒", custom_id="ticket_close"))
+
+            staff_mentions = " ".join([f"<@&{rid}>" for rid in staff_role_ids]) if staff_role_ids else ""
+            await new_channel.send(content=f"{user.mention} {staff_mentions}".strip(), embed=embed, view=view)
+
+            await interaction.followup.send(f"✅ Your support ticket has been created: {new_channel.mention}", ephemeral=True)
+        except Exception as create_err:
+            print(f"[Tickets] Error creating ticket channel: {create_err}")
+            await interaction.followup.send(f"❌ Failed to create ticket channel: {create_err}", ephemeral=True)
+
+    # 2. Handle Claim Ticket button ("ticket_claim")
+    elif custom_id == "ticket_claim":
+        await interaction.response.defer()
+        user = interaction.user
+        channel = interaction.channel
+        if isinstance(channel, discord.TextChannel) and channel.name.startswith("ticket-"):
+            embed = discord.Embed(
+                description=f"📋 **Ticket Claimed!** {user.mention} is now handling this support ticket.",
+                color=0x10b981
+            )
+            await channel.send(embed=embed)
+
+    # 3. Handle Close Ticket button ("ticket_close")
+    elif custom_id == "ticket_close":
+        await interaction.response.defer()
+        channel = interaction.channel
+        if isinstance(channel, discord.TextChannel) and channel.name.startswith("ticket-"):
+            embed = discord.Embed(
+                description=f"🔒 **Closing Ticket...** Channel will be deleted in **5 seconds**.",
+                color=0xef4444
+            )
+            await channel.send(embed=embed)
+            await asyncio.sleep(5)
+            try:
+                await channel.delete(reason=f"Ticket closed by {interaction.user.name}")
+            except Exception as del_err:
+                print(f"[Tickets] Error deleting channel: {del_err}")
 
 # Run Bot
 bot.run(TOKEN)

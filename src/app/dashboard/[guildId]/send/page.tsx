@@ -2,10 +2,18 @@
 
 import React, { useState, useEffect, use } from 'react';
 import { useDiscordAuth } from '@/components/DiscordAuthProvider';
-import { MessageSquare, Send, CheckCircle2, ShieldAlert, Sparkles } from 'lucide-react';
+import { MessageSquare, Send, CheckCircle2, ShieldAlert, Sparkles, Plus, Trash2, ExternalLink, MousePointerClick } from 'lucide-react';
 
 interface PageProps {
   params: Promise<{ guildId: string }>;
+}
+
+interface MessageButton {
+  id: string;
+  label: string;
+  style: 'link' | 'primary' | 'secondary' | 'success' | 'danger';
+  url?: string;
+  emoji?: string;
 }
 
 export default function SendMessagePage({ params }: PageProps) {
@@ -31,6 +39,30 @@ export default function SendMessagePage({ params }: PageProps) {
   const [embedFooter, setEmbedFooter] = useState('');
   const [embedThumbnail, setEmbedThumbnail] = useState('');
   const [embedImage, setEmbedImage] = useState('');
+
+  // Interactive Buttons settings
+  const [buttons, setButtons] = useState<MessageButton[]>([]);
+
+  const addButton = () => {
+    if (buttons.length >= 5) return;
+    setButtons([
+      ...buttons,
+      {
+        id: Date.now().toString(),
+        label: `Button ${buttons.length + 1}`,
+        style: 'link',
+        url: 'https://organikbot.com',
+      },
+    ]);
+  };
+
+  const updateButton = (id: string, field: keyof MessageButton, value: string) => {
+    setButtons(buttons.map((b) => (b.id === id ? { ...b, [field]: value } : b)));
+  };
+
+  const removeButton = (id: string) => {
+    setButtons(buttons.filter((b) => b.id !== id));
+  };
 
   // Status
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -102,6 +134,15 @@ export default function SendMessagePage({ params }: PageProps) {
         };
       }
 
+      if (buttons.length > 0) {
+        payload.buttons = buttons.map((b) => ({
+          label: b.label,
+          style: b.style,
+          url: b.style === 'link' ? b.url : undefined,
+          emoji: b.emoji || undefined,
+        }));
+      }
+
       const res = await fetch('/api/send-message', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -113,6 +154,7 @@ export default function SendMessagePage({ params }: PageProps) {
       if (res.ok) {
         setStatus('success');
         setStatusMessage('Message sent successfully!');
+        setButtons([]);
         if (msgMode === 'text') {
           setTextContent('');
         } else {
@@ -283,6 +325,126 @@ export default function SendMessagePage({ params }: PageProps) {
             </div>
           )}
 
+          {/* Interactive Buttons Builder */}
+          <div style={{ marginTop: '10px', paddingTop: '20px', borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                <MousePointerClick size={18} color="var(--primary)" />
+                <h3 style={{ fontSize: '1rem', fontWeight: '700' }}>Message Buttons (Optional)</h3>
+              </div>
+              <button
+                type="button"
+                onClick={addButton}
+                disabled={buttons.length >= 5}
+                className="btn btn-secondary"
+                style={{ padding: '6px 12px', fontSize: '0.8rem' }}
+              >
+                <Plus size={14} /> Add Button ({buttons.length}/5)
+              </button>
+            </div>
+
+            {buttons.length === 0 ? (
+              <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+                No buttons added yet. Click "Add Button" to attach interactive link or action buttons to your message.
+              </p>
+            ) : (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+                {buttons.map((btn, index) => (
+                  <div
+                    key={btn.id}
+                    style={{
+                      background: 'rgba(0,0,0,0.2)',
+                      border: '1px solid var(--border-color)',
+                      borderRadius: '10px',
+                      padding: '12px',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '10px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                      <span style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-secondary)' }}>
+                        Button #{index + 1}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => removeButton(btn.id)}
+                        style={{ background: 'transparent', border: 'none', color: '#f87171', cursor: 'pointer', padding: '2px' }}
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </div>
+
+                    <div className="form-row-inline">
+                      <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
+                        <label className="form-label">Button Text</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="e.g. Visit Website"
+                          value={btn.label}
+                          onChange={(e) => updateButton(btn.id, 'label', e.target.value)}
+                        />
+                      </div>
+
+                      <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                        <label className="form-label">Color / Style</label>
+                        <select
+                          className="form-select"
+                          value={btn.style}
+                          onChange={(e) => updateButton(btn.id, 'style', e.target.value as any)}
+                        >
+                          <option value="link">Link (URL)</option>
+                          <option value="primary">Primary (Blurple)</option>
+                          <option value="secondary">Secondary (Grey)</option>
+                          <option value="success">Success (Green)</option>
+                          <option value="danger">Danger (Red)</option>
+                        </select>
+                      </div>
+                    </div>
+
+                    <div className="form-row-inline">
+                      {btn.style === 'link' ? (
+                        <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
+                          <label className="form-label">Link URL (http/https)</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="https://..."
+                            value={btn.url || ''}
+                            onChange={(e) => updateButton(btn.id, 'url', e.target.value)}
+                          />
+                        </div>
+                      ) : (
+                        <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
+                          <label className="form-label">Custom Action ID</label>
+                          <input
+                            type="text"
+                            className="form-input"
+                            placeholder="action_id"
+                            value={btn.url || ''}
+                            onChange={(e) => updateButton(btn.id, 'url', e.target.value)}
+                          />
+                        </div>
+                      )}
+
+                      <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
+                        <label className="form-label">Emoji (Optional)</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="e.g. 🔗 or 🚀"
+                          value={btn.emoji || ''}
+                          onChange={(e) => updateButton(btn.id, 'emoji', e.target.value)}
+                        />
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Action Status */}
           {status === 'success' && (
             <div style={styles.statusSuccess}>
@@ -375,6 +537,44 @@ export default function SendMessagePage({ params }: PageProps) {
                       </div>
                     )}
                   </>
+                )}
+
+                {/* Render Interactive Buttons in Discord Preview */}
+                {buttons.length > 0 && (
+                  <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap', marginTop: '12px' }}>
+                    {buttons.map((btn) => {
+                      const getBg = () => {
+                        switch (btn.style) {
+                          case 'primary': return '#5865f2';
+                          case 'secondary': return '#4e5058';
+                          case 'success': return '#248046';
+                          case 'danger': return '#da373c';
+                          case 'link': default: return '#4e5058';
+                        }
+                      };
+                      return (
+                        <div
+                          key={btn.id}
+                          style={{
+                            background: getBg(),
+                            color: '#ffffff',
+                            padding: '6px 14px',
+                            borderRadius: '4px',
+                            fontSize: '0.82rem',
+                            fontWeight: '600',
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: '6px',
+                            boxShadow: '0 1px 2px rgba(0,0,0,0.3)',
+                          }}
+                        >
+                          {btn.emoji && <span>{btn.emoji}</span>}
+                          <span>{btn.label || 'Button'}</span>
+                          {btn.style === 'link' && <ExternalLink size={12} style={{ opacity: 0.8 }} />}
+                        </div>
+                      );
+                    })}
+                  </div>
                 )}
               </div>
             </div>

@@ -4,7 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useDiscordAuth } from '@/components/DiscordAuthProvider';
-import { MessageSquare, Shield, Gift, ArrowLeft, Disc, ShieldAlert, Share2 } from 'lucide-react';
+import { MessageSquare, Shield, Gift, ArrowLeft, Disc, ShieldAlert, Share2, Ticket } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -130,6 +130,13 @@ export default function GuildDashboardLayout({ children, params }: LayoutProps) 
           >
             <Gift size={18} />
             <span className="nav-label">Giveaways</span>
+          </Link>
+          <Link
+            href={`/dashboard/${guildId}/tickets`}
+            style={pathname.endsWith('/tickets') ? styles.activeNavLink : styles.navLink}
+          >
+            <Ticket size={18} />
+            <span className="nav-label">Support Tickets</span>
           </Link>
           <Link
             href={`/dashboard/${guildId}/integrations`}
