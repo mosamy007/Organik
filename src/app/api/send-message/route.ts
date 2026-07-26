@@ -3,6 +3,16 @@ import { getSession } from '@/lib/session';
 import { verifyGuildAdmin } from '@/lib/auth-helpers';
 import { sendChannelMessage } from '@/lib/discord-api';
 
+function normalizeUrl(rawUrl: string | undefined): string {
+  if (!rawUrl) return '';
+  let trimmed = rawUrl.trim();
+  if (!trimmed) return '';
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    trimmed = 'https://' + trimmed;
+  }
+  return trimmed;
+}
+
 export async function POST(req: NextRequest) {
   const session = getSession(req);
 
@@ -31,8 +41,9 @@ export async function POST(req: NextRequest) {
           danger: 4,
           link: 5,
         };
-        const hasUrl = Boolean(b.url && b.url.trim().startsWith('http'));
-        const styleNum = styleMap[b.style] || 1;
+        const cleanUrl = normalizeUrl(b.url);
+        const hasUrl = Boolean(cleanUrl);
+        const styleNum = styleMap[b.style] || (b.style === 'link' ? 5 : 1);
 
         const btnObj: any = {
           type: 2,
@@ -41,11 +52,11 @@ export async function POST(req: NextRequest) {
         };
 
         if (styleNum === 5) {
-          btnObj.url = hasUrl ? b.url.trim() : 'https://organikbot.com';
+          btnObj.url = hasUrl ? cleanUrl : 'https://organikbot.com';
         } else {
           if (hasUrl) {
             // Encode target URL into custom_id so the bot can respond with the link upon click
-            btnObj.custom_id = `url_click:${b.url.trim()}`;
+            btnObj.custom_id = `url_click:${cleanUrl}`;
           } else {
             btnObj.custom_id = b.customId || `custom_action_btn_${index}_${Date.now()}`;
           }
