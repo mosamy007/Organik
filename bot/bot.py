@@ -1031,5 +1031,16 @@ async def on_interaction(interaction: discord.Interaction):
             except Exception as del_err:
                 print(f"[Tickets] Error deleting channel: {del_err}")
 
+    # 4. Fallback handler for any custom message buttons to prevent "interaction failed"
+    else:
+        if not interaction.response.is_done():
+            try:
+                await interaction.response.send_message(
+                    "👍 Button clicked!",
+                    ephemeral=True
+                )
+            except Exception as e:
+                print(f"[Interaction] Error responding to custom button: {e}")
+
 # Run Bot
 bot.run(TOKEN)

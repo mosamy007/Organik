@@ -31,19 +31,25 @@ export async function POST(req: NextRequest) {
           danger: 4,
           link: 5,
         };
-        const styleNum = styleMap[b.style] || (b.url ? 5 : 1);
+        const hasUrl = Boolean(b.url && b.url.trim().startsWith('http'));
+        // Discord API enforces: Any button with a URL MUST be style 5 (Link).
+        // Styles 1-4 (Primary/Secondary/Success/Danger) are for bot interactions and cannot contain a URL.
+        const styleNum = (hasUrl || b.style === 'link') ? 5 : (styleMap[b.style] || 1);
+
         const btnObj: any = {
           type: 2,
           style: styleNum,
           label: b.label || 'Button',
         };
+
         if (styleNum === 5) {
-          btnObj.url = b.url || 'https://discord.com';
+          btnObj.url = hasUrl ? b.url.trim() : 'https://discord.com';
         } else {
-          btnObj.custom_id = b.customId || `custom_btn_${index}_${Date.now()}`;
+          btnObj.custom_id = b.customId || `custom_action_btn_${index}_${Date.now()}`;
         }
-        if (b.emoji) {
-          btnObj.emoji = { name: b.emoji };
+
+        if (b.emoji && b.emoji.trim()) {
+          btnObj.emoji = { name: b.emoji.trim() };
         }
         return btnObj;
       });

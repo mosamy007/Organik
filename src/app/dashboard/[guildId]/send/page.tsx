@@ -388,43 +388,49 @@ export default function SendMessagePage({ params }: PageProps) {
                       </div>
 
                       <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
-                        <label className="form-label">Color / Style</label>
+                        <label className="form-label">Type / Color</label>
                         <select
                           className="form-select"
                           value={btn.style}
                           onChange={(e) => updateButton(btn.id, 'style', e.target.value as any)}
                         >
-                          <option value="link">Link (URL)</option>
-                          <option value="primary">Primary (Blurple)</option>
-                          <option value="secondary">Secondary (Grey)</option>
-                          <option value="success">Success (Green)</option>
-                          <option value="danger">Danger (Red)</option>
+                          <option value="link">🌐 Link (Opens Web URL)</option>
+                          <option value="primary">🟣 Primary (Blurple Action)</option>
+                          <option value="secondary">⚪ Secondary (Grey Action)</option>
+                          <option value="success">🟢 Success (Green Action)</option>
+                          <option value="danger">🔴 Danger (Red Action)</option>
                         </select>
                       </div>
                     </div>
 
                     <div className="form-row-inline">
-                      {btn.style === 'link' ? (
+                      {btn.style === 'link' || Boolean(btn.url) ? (
                         <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
                           <label className="form-label">Link URL (http/https)</label>
                           <input
                             type="text"
                             className="form-input"
-                            placeholder="https://..."
+                            placeholder="https://yourwebsite.com"
                             value={btn.url || ''}
                             onChange={(e) => updateButton(btn.id, 'url', e.target.value)}
                           />
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            ℹ️ Discord API automatically renders web link buttons with the link icon.
+                          </span>
                         </div>
                       ) : (
                         <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
-                          <label className="form-label">Custom Action ID</label>
+                          <label className="form-label">Custom Action ID (Optional)</label>
                           <input
                             type="text"
                             className="form-input"
-                            placeholder="action_id"
+                            placeholder="e.g. click_action"
                             value={btn.url || ''}
                             onChange={(e) => updateButton(btn.id, 'url', e.target.value)}
                           />
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                            ℹ️ Triggers a bot response when clicked inside Discord.
+                          </span>
                         </div>
                       )}
 
