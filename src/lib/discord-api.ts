@@ -281,3 +281,65 @@ export async function getGuildMember(guildId: string, userId: string): Promise<a
 
   return res.json();
 }
+
+/**
+ * Fetches a single message by ID from a specific channel.
+ */
+export async function getChannelMessage(
+  channelId: string,
+  messageId: string
+): Promise<{ success: boolean; message?: any; error?: string }> {
+  if (!BOT_TOKEN) throw new Error('Missing Discord Bot Token.');
+
+  const res = await fetch(`${API_ENDPOINT}/channels/${channelId}/messages/${messageId}`, {
+    headers: {
+      Authorization: `Bot ${BOT_TOKEN}`,
+    },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Failed to fetch message ${messageId} from channel ${channelId}:`, errText);
+    return { success: false, error: `Message not found or bot lacks permission (${res.status}).` };
+  }
+
+  const message = await res.json();
+  return { success: true, message };
+}
+
+/**
+ * Edits an existing message in a specific channel.
+ */
+export async function editChannelMessage(
+  channelId: string,
+  messageId: string,
+  content: string,
+  embeds?: any[],
+  components?: any[]
+): Promise<{ success: boolean; messageId?: string; error?: string }> {
+  if (!BOT_TOKEN) throw new Error('Missing Discord Bot Token.');
+
+  const body: any = {
+    content: content || '',
+    embeds: embeds || [],
+    components: components || [],
+  };
+
+  const res = await fetch(`${API_ENDPOINT}/channels/${channelId}/messages/${messageId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(body),
+    headers: {
+      Authorization: `Bot ${BOT_TOKEN}`,
+      'Content-Type': 'application/json',
+    },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    console.error(`Failed to edit message ${messageId} in channel ${channelId}:`, errText);
+    return { success: false, error: errText };
+  }
+
+  const msg = await res.json();
+  return { success: true, messageId: msg.id };
+}

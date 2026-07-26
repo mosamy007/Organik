@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { verifyGuildAdmin } from '@/lib/auth-helpers';
-import { sendChannelMessage } from '@/lib/discord-api';
+import { getChannelMessage, editChannelMessage, sendChannelMessage } from '@/lib/discord-api';
 
 function normalizeUrl(rawUrl: string | undefined): string {
   if (!rawUrl) return '';
@@ -11,6 +11,91 @@ function normalizeUrl(rawUrl: string | undefined): string {
     trimmed = 'https://' + trimmed;
   }
   return trimmed;
+}
+
+export async function GET(req: NextRequest) {
+  const session = getSession(req);
+  const { searchParams } = new URL(req.url);
+  const guildId = searchParams.get('guildId');
+  const channelId = searchParams.get('channelId');
+  const messageId = searchParams.get('messageId');
+
+  if (!guildId || !channelId || !messageId) {
+    return NextResponse.json({ error: 'Missing required parameters: guildId, channelId, and messageId' }, { status: 400 });
+  }
+
+  const isAdmin = await verifyGuildAdmin(session, guildId);
+  if (!isAdmin) {
+    return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+  }
+
+  try {
+    const result = await getChannelMessage(channelId, messageId);
+    if (!result.success || !result.message) {
+      return NextResponse.json({ error: result.error || 'Message not found' }, { status: 404 });
+    }
+
+    const msg = result.message;
+
+    // Parse buttons from Discord components
+    const buttons: any[] = [];
+    if (Array.isArray(msg.components)) {
+      for (const row of msg.components) {
+        if (row.type === 1 && Array.isArray(row.components)) {
+          for (const btn of row.components) {
+            if (btn.type === 2) {
+              let styleName = 'primary';
+              if (btn.style === 2) styleName = 'secondary';
+              if (btn.style === 3) styleName = 'success';
+              if (btn.style === 4) styleName = 'danger';
+              if (btn.style === 5) styleName = 'link';
+
+              let urlVal = btn.url || '';
+              if (btn.custom_id && btn.custom_id.startsWith('url_click:')) {
+                urlVal = btn.custom_id.replace('url_click:', '');
+              }
+
+              buttons.push({
+                id: btn.id || btn.custom_id || Date.now().toString() + Math.random(),
+                label: btn.label || '',
+                style: styleName,
+                url: urlVal,
+                emoji: btn.emoji?.name || '',
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Parse embed if present
+    let embedObj: any = null;
+    if (Array.isArray(msg.embeds) && msg.embeds.length > 0) {
+      const e = msg.embeds[0];
+      const hexColor = e.color ? `#${e.color.toString(16).padStart(6, '0')}` : '#5865f2';
+      embedObj = {
+        title: e.title || '',
+        description: e.description || '',
+        color: hexColor,
+        footer: e.footer?.text || '',
+        thumbnail: e.thumbnail?.url || '',
+        image: e.image?.url || '',
+      };
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        msgMode: embedObj ? 'embed' : 'text',
+        textContent: msg.content || '',
+        embed: embedObj,
+        buttons,
+      },
+    });
+  } catch (err: any) {
+    console.error('Error fetching message:', err);
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+  }
 }
 
 export async function POST(req: NextRequest) {
@@ -85,6 +170,80 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ success: true, messageId: result.messageId });
   } catch (err: any) {
     console.error('Error sending message:', err);
+    return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function PATCH(req: NextRequest) {
+  const session = getSession(req);
+
+  try {
+    const { guildId, channelId, messageId, content, embed, buttons } = await req.json();
+
+    if (!guildId || !channelId || !messageId) {
+      return NextResponse.json({ error: 'Missing required parameters: guildId, channelId, and messageId' }, { status: 400 });
+    }
+
+    const isAdmin = await verifyGuildAdmin(session, guildId);
+    if (!isAdmin) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    const embeds = embed ? [embed] : undefined;
+
+    let components: any[] | undefined = undefined;
+    if (Array.isArray(buttons) && buttons.length > 0) {
+      const buttonComponents = buttons.map((b: any, index: number) => {
+        const styleMap: Record<string, number> = {
+          primary: 1,
+          secondary: 2,
+          success: 3,
+          danger: 4,
+          link: 5,
+        };
+        const cleanUrl = normalizeUrl(b.url);
+        const hasUrl = Boolean(cleanUrl);
+        const styleNum = styleMap[b.style] || (b.style === 'link' ? 5 : 1);
+
+        const btnObj: any = {
+          type: 2,
+          style: styleNum,
+          label: b.label || 'Button',
+        };
+
+        if (styleNum === 5) {
+          btnObj.url = hasUrl ? cleanUrl : 'https://organikbot.com';
+        } else {
+          if (hasUrl) {
+            btnObj.custom_id = `url_click:${cleanUrl}`;
+          } else {
+            btnObj.custom_id = b.customId || `custom_action_btn_${index}_${Date.now()}`;
+          }
+        }
+
+        if (b.emoji && b.emoji.trim()) {
+          btnObj.emoji = { name: b.emoji.trim() };
+        }
+        return btnObj;
+      });
+
+      components = [
+        {
+          type: 1, // ActionRow
+          components: buttonComponents,
+        },
+      ];
+    }
+
+    const result = await editChannelMessage(channelId, messageId, content, embeds, components);
+
+    if (!result.success) {
+      return NextResponse.json({ error: result.error || 'Failed to edit message' }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, messageId: result.messageId });
+  } catch (err: any) {
+    console.error('Error editing message:', err);
     return NextResponse.json({ error: err.message || 'Internal Server Error' }, { status: 500 });
   }
 }

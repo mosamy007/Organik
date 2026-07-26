@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, use } from 'react';
 import { useDiscordAuth } from '@/components/DiscordAuthProvider';
-import { MessageSquare, Send, CheckCircle2, ShieldAlert, Sparkles, Plus, Trash2, ExternalLink, MousePointerClick } from 'lucide-react';
+import { MessageSquare, Send, CheckCircle2, ShieldAlert, Sparkles, Plus, Trash2, ExternalLink, MousePointerClick, Edit3, Search, FileEdit } from 'lucide-react';
 
 interface PageProps {
   params: Promise<{ guildId: string }>;
@@ -28,6 +28,11 @@ export default function SendMessagePage({ params }: PageProps) {
   const [loadingChannels, setLoadingChannels] = useState(true);
   const [selectedChannelId, setSelectedChannelId] = useState('');
   
+  // Action Type (Send new vs Edit existing)
+  const [actionType, setActionType] = useState<'send' | 'edit'>('send');
+  const [editMessageId, setEditMessageId] = useState('');
+  const [fetchingMessage, setFetchingMessage] = useState(false);
+
   // Message settings
   const [msgMode, setMsgMode] = useState<'text' | 'embed'>('text');
   const [textContent, setTextContent] = useState('');
@@ -90,10 +95,66 @@ export default function SendMessagePage({ params }: PageProps) {
     fetchChannels();
   }, [guildId]);
 
+  // Fetch Existing Message by ID for editing
+  const fetchExistingMessage = async () => {
+    if (!selectedChannelId || !editMessageId.trim()) {
+      setStatus('error');
+      setStatusMessage('Please select a channel and enter a valid Message ID.');
+      return;
+    }
+
+    setFetchingMessage(true);
+    setStatus('loading');
+    setStatusMessage('Fetching message details from Discord...');
+
+    try {
+      const res = await fetch(`/api/send-message?guildId=${guildId}&channelId=${selectedChannelId}&messageId=${editMessageId.trim()}`);
+      const result = await res.json();
+
+      if (res.ok && result.data) {
+        const d = result.data;
+        setMsgMode(d.msgMode || 'text');
+        setTextContent(d.textContent || '');
+        if (d.embed) {
+          setEmbedTitle(d.embed.title || '');
+          setEmbedDesc(d.embed.description || '');
+          setEmbedColor(d.embed.color || '#5865f2');
+          setEmbedFooter(d.embed.footer || '');
+          setEmbedThumbnail(d.embed.thumbnail || '');
+          setEmbedImage(d.embed.image || '');
+        } else {
+          setEmbedTitle('');
+          setEmbedDesc('');
+          setEmbedFooter('');
+          setEmbedThumbnail('');
+          setEmbedImage('');
+        }
+        setButtons(d.buttons || []);
+        setStatus('success');
+        setStatusMessage('Message loaded successfully! Edit its details below and click "Update Message".');
+      } else {
+        setStatus('error');
+        setStatusMessage(result.error || 'Failed to fetch message from Discord.');
+      }
+    } catch (err: any) {
+      console.error('Fetch message error:', err);
+      setStatus('error');
+      setStatusMessage('Network error loading message.');
+    } finally {
+      setFetchingMessage(false);
+    }
+  };
+
   const handleSendMessage = async () => {
     if (!selectedChannelId) {
       setStatus('error');
       setStatusMessage('Please select a target channel.');
+      return;
+    }
+
+    if (actionType === 'edit' && !editMessageId.trim()) {
+      setStatus('error');
+      setStatusMessage('Please enter a valid Message ID to edit.');
       return;
     }
 
@@ -110,13 +171,17 @@ export default function SendMessagePage({ params }: PageProps) {
     }
 
     setStatus('loading');
-    setStatusMessage('Sending message to channel...');
+    setStatusMessage(actionType === 'edit' ? 'Updating message on Discord...' : 'Sending message to channel...');
 
     try {
       const payload: any = {
         guildId,
         channelId: selectedChannelId,
       };
+
+      if (actionType === 'edit') {
+        payload.messageId = editMessageId.trim();
+      }
 
       if (msgMode === 'text') {
         payload.content = textContent;
@@ -144,7 +209,7 @@ export default function SendMessagePage({ params }: PageProps) {
       }
 
       const res = await fetch('/api/send-message', {
-        method: 'POST',
+        method: actionType === 'edit' ? 'PATCH' : 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
@@ -153,23 +218,25 @@ export default function SendMessagePage({ params }: PageProps) {
 
       if (res.ok) {
         setStatus('success');
-        setStatusMessage('Message sent successfully!');
-        setButtons([]);
-        if (msgMode === 'text') {
-          setTextContent('');
-        } else {
-          setEmbedTitle('');
-          setEmbedDesc('');
-          setEmbedFooter('');
-          setEmbedThumbnail('');
-          setEmbedImage('');
+        setStatusMessage(actionType === 'edit' ? 'Message updated successfully on Discord!' : 'Message sent successfully!');
+        if (actionType === 'send') {
+          setButtons([]);
+          if (msgMode === 'text') {
+            setTextContent('');
+          } else {
+            setEmbedTitle('');
+            setEmbedDesc('');
+            setEmbedFooter('');
+            setEmbedThumbnail('');
+            setEmbedImage('');
+          }
         }
       } else {
         setStatus('error');
-        setStatusMessage(data.error || 'Failed to send message.');
+        setStatusMessage(data.error || 'Failed to process message.');
       }
     } catch (err: any) {
-      console.error('Send message error:', err);
+      console.error('Send/Edit message error:', err);
       setStatus('error');
       setStatusMessage(err.message || 'An unexpected error occurred.');
     }
@@ -190,6 +257,91 @@ export default function SendMessagePage({ params }: PageProps) {
       <div className="page-two-col">
         {/* Editor Form */}
         <div className="glass-card" style={styles.editorCard}>
+          {/* Action Type Mode Switcher */}
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', background: 'rgba(0,0,0,0.3)', padding: '6px', borderRadius: '12px', border: '1px solid var(--border-color)' }}>
+            <button
+              type="button"
+              onClick={() => setActionType('send')}
+              style={{
+                flex: 1,
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                fontWeight: '600',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                background: actionType === 'send' ? 'var(--primary)' : 'transparent',
+                color: actionType === 'send' ? '#fff' : 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <Send size={14} /> Send New Message
+            </button>
+            <button
+              type="button"
+              onClick={() => setActionType('edit')}
+              style={{
+                flex: 1,
+                padding: '8px 14px',
+                borderRadius: '8px',
+                border: 'none',
+                fontWeight: '600',
+                fontSize: '0.85rem',
+                cursor: 'pointer',
+                background: actionType === 'edit' ? 'var(--primary)' : 'transparent',
+                color: actionType === 'edit' ? '#fff' : 'var(--text-secondary)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '6px',
+                transition: 'all 0.2s ease',
+              }}
+            >
+              <Edit3 size={14} /> Edit Existing Message
+            </button>
+          </div>
+
+          {/* Edit Message ID Loader */}
+          {actionType === 'edit' && (
+            <div className="animate-fade-in" style={{ background: 'rgba(139, 92, 246, 0.08)', border: '1px solid rgba(139, 92, 246, 0.2)', padding: '16px', borderRadius: '12px', marginBottom: '20px' }}>
+              <label className="form-label" style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <FileEdit size={14} color="var(--primary)" /> Message ID to Edit
+              </label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Paste Discord Message ID (e.g. 1234567890123456789)"
+                  value={editMessageId}
+                  onChange={(e) => setEditMessageId(e.target.value)}
+                  style={{ flex: 1 }}
+                />
+                <button
+                  type="button"
+                  onClick={fetchExistingMessage}
+                  disabled={fetchingMessage || !editMessageId.trim()}
+                  className="btn btn-secondary"
+                  style={{ padding: '0 16px', whiteSpace: 'nowrap' }}
+                >
+                  {fetchingMessage ? (
+                    <div className="spinner" style={{ width: '14px', height: '14px' }}></div>
+                  ) : (
+                    <>
+                      <Search size={14} /> Load Message
+                    </>
+                  )}
+                </button>
+              </div>
+              <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '6px', marginBottom: 0 }}>
+                💡 Right-click any message sent by Organik Bot in Discord and click "Copy Message ID".
+              </p>
+            </div>
+          )}
+
           <div className="form-group">
             <label className="form-label">Target Text Channel</label>
             {loadingChannels ? (
@@ -449,7 +601,7 @@ export default function SendMessagePage({ params }: PageProps) {
             </div>
           )}
 
-          {/* Send Trigger */}
+          {/* Send / Update Trigger */}
           <button
             onClick={handleSendMessage}
             disabled={status === 'loading'}
@@ -458,11 +610,11 @@ export default function SendMessagePage({ params }: PageProps) {
           >
             {status === 'loading' ? (
               <>
-                <div className="spinner" style={{ width: '16px', height: '16px' }}></div> Sending...
+                <div className="spinner" style={{ width: '16px', height: '16px' }}></div> {actionType === 'edit' ? 'Updating...' : 'Sending...'}
               </>
             ) : (
               <>
-                Send Message <Send size={16} />
+                {actionType === 'edit' ? 'Update Message' : 'Send Message'} {actionType === 'edit' ? <Edit3 size={16} /> : <Send size={16} />}
               </>
             )}
           </button>
