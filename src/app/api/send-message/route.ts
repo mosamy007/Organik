@@ -32,9 +32,7 @@ export async function POST(req: NextRequest) {
           link: 5,
         };
         const hasUrl = Boolean(b.url && b.url.trim().startsWith('http'));
-        // Discord API enforces: Any button with a URL MUST be style 5 (Link).
-        // Styles 1-4 (Primary/Secondary/Success/Danger) are for bot interactions and cannot contain a URL.
-        const styleNum = (hasUrl || b.style === 'link') ? 5 : (styleMap[b.style] || 1);
+        const styleNum = styleMap[b.style] || 1;
 
         const btnObj: any = {
           type: 2,
@@ -43,9 +41,14 @@ export async function POST(req: NextRequest) {
         };
 
         if (styleNum === 5) {
-          btnObj.url = hasUrl ? b.url.trim() : 'https://discord.com';
+          btnObj.url = hasUrl ? b.url.trim() : 'https://organikbot.com';
         } else {
-          btnObj.custom_id = b.customId || `custom_action_btn_${index}_${Date.now()}`;
+          if (hasUrl) {
+            // Encode target URL into custom_id so the bot can respond with the link upon click
+            btnObj.custom_id = `url_click:${b.url.trim()}`;
+          } else {
+            btnObj.custom_id = b.customId || `custom_action_btn_${index}_${Date.now()}`;
+          }
         }
 
         if (b.emoji && b.emoji.trim()) {

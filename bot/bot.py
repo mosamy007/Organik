@@ -1031,7 +1031,18 @@ async def on_interaction(interaction: discord.Interaction):
             except Exception as del_err:
                 print(f"[Tickets] Error deleting channel: {del_err}")
 
-    # 4. Fallback handler for any custom message buttons to prevent "interaction failed"
+    # 4. Handle colored buttons that have an embedded URL
+    elif custom_id.startswith("url_click:"):
+        target_url = custom_id[len("url_click:"):].strip()
+        view = discord.ui.View()
+        view.add_item(discord.ui.Button(label="Open Link", url=target_url, style=discord.ButtonStyle.link, emoji="🔗"))
+        await interaction.response.send_message(
+            content=f"🔗 **Click below to open link:**\n<{target_url}>",
+            view=view,
+            ephemeral=True
+        )
+
+    # 5. Fallback handler for any custom message buttons to prevent "interaction failed"
     else:
         if not interaction.response.is_done():
             try:

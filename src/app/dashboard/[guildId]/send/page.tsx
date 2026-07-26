@@ -404,35 +404,19 @@ export default function SendMessagePage({ params }: PageProps) {
                     </div>
 
                     <div className="form-row-inline">
-                      {btn.style === 'link' || Boolean(btn.url) ? (
-                        <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
-                          <label className="form-label">Link URL (http/https)</label>
-                          <input
-                            type="text"
-                            className="form-input"
-                            placeholder="https://yourwebsite.com"
-                            value={btn.url || ''}
-                            onChange={(e) => updateButton(btn.id, 'url', e.target.value)}
-                          />
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                            ℹ️ Discord API automatically renders web link buttons with the link icon.
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
-                          <label className="form-label">Custom Action ID (Optional)</label>
-                          <input
-                            type="text"
-                            className="form-input"
-                            placeholder="e.g. click_action"
-                            value={btn.url || ''}
-                            onChange={(e) => updateButton(btn.id, 'url', e.target.value)}
-                          />
-                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
-                            ℹ️ Triggers a bot response when clicked inside Discord.
-                          </span>
-                        </div>
-                      )}
+                      <div className="form-group" style={{ flex: 2, marginBottom: 0 }}>
+                        <label className="form-label">Link URL (Optional)</label>
+                        <input
+                          type="text"
+                          className="form-input"
+                          placeholder="https://yourwebsite.com"
+                          value={btn.url || ''}
+                          onChange={(e) => updateButton(btn.id, 'url', e.target.value)}
+                        />
+                        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+                          ℹ️ Enter a web link (`https://...`). If a colored button is clicked, the bot will deliver your link in Discord!
+                        </span>
+                      </div>
 
                       <div className="form-group" style={{ flex: 1, marginBottom: 0 }}>
                         <label className="form-label">Emoji (Optional)</label>
