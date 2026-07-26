@@ -138,7 +138,7 @@ export default function SendMessagePage({ params }: PageProps) {
         payload.buttons = buttons.map((b) => ({
           label: b.label,
           style: b.style,
-          url: b.style === 'link' ? b.url : undefined,
+          url: b.url ? b.url.trim() : undefined,
           emoji: b.emoji || undefined,
         }));
       }
