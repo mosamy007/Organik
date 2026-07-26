@@ -73,7 +73,7 @@ export async function GET(req: NextRequest) {
       channels,
       integrations: integrations || {
         guildId,
-        twitter: { enabled: false, channelId: '', accounts: [] },
+        twitter: { enabled: false, channelId: '', pingRoleId: '', accounts: [] },
         sales: { enabled: false, channelId: '', contracts: [] },
       },
     });
@@ -90,8 +90,7 @@ export async function POST(req: NextRequest) {
   }
 
   try {
-    const body = await req.json();
-    const { guildId, twitter, sales } = body;
+    const { guildId, twitter, sales } = await req.json();
 
     if (!guildId) {
       return NextResponse.json({ error: 'Missing guildId parameter' }, { status: 400 });
@@ -150,6 +149,7 @@ export async function POST(req: NextRequest) {
       twitter: {
         enabled: !!twitter?.enabled,
         channelId: twitter?.channelId || '',
+        pingRoleId: twitter?.pingRoleId || '',
         accounts: twitterAccounts,
         lastProcessedIds: existing?.twitter?.lastProcessedIds || {},
       },

@@ -20,6 +20,7 @@ export default function IntegrationsPage({ params }: PageProps) {
 
   // Configuration States
   const [channels, setChannels] = useState<any[]>([]);
+  const [roles, setRoles] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [status, setStatus] = useState<'idle' | 'success' | 'error'>('idle');
@@ -28,6 +29,7 @@ export default function IntegrationsPage({ params }: PageProps) {
   // Twitter State
   const [twitterEnabled, setTwitterEnabled] = useState(false);
   const [twitterChannel, setTwitterChannel] = useState('');
+  const [twitterPingRole, setTwitterPingRole] = useState('');
   const [twitterAccounts, setTwitterAccounts] = useState<string[]>([]);
   const [newTwitterInput, setNewTwitterInput] = useState('');
 
@@ -39,14 +41,23 @@ export default function IntegrationsPage({ params }: PageProps) {
   const [newContractChain, setNewContractChain] = useState('ethereum');
   const [newContractName, setNewContractName] = useState('');
 
-  // Load configuration
+  // Load configuration & roles
   useEffect(() => {
     const fetchConfig = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/integrations?guildId=${guildId}`);
-        if (res.ok) {
-          const data = await res.json();
+        const [configRes, rolesRes] = await Promise.all([
+          fetch(`/api/integrations?guildId=${guildId}`),
+          fetch(`/api/roles?guildId=${guildId}`),
+        ]);
+
+        if (rolesRes.ok) {
+          const rData = await rolesRes.json();
+          setRoles((rData.roles || []).filter((r: any) => r.name !== '@everyone' && !r.managed));
+        }
+
+        if (configRes.ok) {
+          const data = await configRes.json();
           setChannels(data.channels || []);
           
           if (data.integrations) {
@@ -54,6 +65,7 @@ export default function IntegrationsPage({ params }: PageProps) {
             
             setTwitterEnabled(!!twitter?.enabled);
             setTwitterChannel(twitter?.channelId || '');
+            setTwitterPingRole(twitter?.pingRoleId || '');
             setTwitterAccounts(twitter?.accounts || []);
             
             setSalesEnabled(!!sales?.enabled);
@@ -61,7 +73,7 @@ export default function IntegrationsPage({ params }: PageProps) {
             setContracts(sales?.contracts || []);
           }
         } else {
-          const data = await res.json().catch(() => ({}));
+          const data = await configRes.json().catch(() => ({}));
           setStatus('error');
           setStatusMessage(data.error || 'Failed to load integration settings.');
         }
@@ -150,6 +162,7 @@ export default function IntegrationsPage({ params }: PageProps) {
           twitter: {
             enabled: twitterEnabled,
             channelId: twitterChannel,
+            pingRoleId: twitterPingRole,
             accounts: twitterAccounts,
           },
           sales: {
@@ -238,6 +251,25 @@ export default function IntegrationsPage({ params }: PageProps) {
                 {channels.map((chan) => (
                   <option key={chan.id} value={chan.id}>
                     # {chan.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="form-group" style={{ marginBottom: '20px' }}>
+              <label className="form-label">Role to Mention / Ping (Optional)</label>
+              <select 
+                className="form-input" 
+                value={twitterPingRole} 
+                onChange={(e) => setTwitterPingRole(e.target.value)}
+                disabled={!twitterEnabled}
+              >
+                <option value="">-- No Mention / Ping --</option>
+                <option value="everyone">@everyone</option>
+                <option value="here">@here</option>
+                {roles.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    @{r.name}
                   </option>
                 ))}
               </select>

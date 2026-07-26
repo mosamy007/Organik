@@ -455,10 +455,18 @@ async def twitter_polling_loop():
                         continue
 
                 new_tweets = [t for t in tweets if t['id'] not in processed_ids]
+                ping_role_id = config.get("twitter", {}).get("pingRoleId", "")
 
                 for tweet in reversed(new_tweets):
                     try:
-                        await channel.send(tweet['link'])
+                        tweet_msg = tweet['link']
+                        if ping_role_id:
+                            if ping_role_id in ["everyone", "here"]:
+                                tweet_msg = f"@{ping_role_id} {tweet['link']}"
+                            else:
+                                tweet_msg = f"<@&{ping_role_id}> {tweet['link']}"
+
+                        await channel.send(tweet_msg)
                         processed_ids.append(tweet['id'])
                         db_updated = True
                     except Exception as send_err:
