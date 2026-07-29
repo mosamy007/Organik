@@ -183,7 +183,15 @@ export default function SendMessagePage({ params }: PageProps) {
         payload.messageId = editMessageId.trim();
       }
 
-      if (msgMode === 'text') {
+      const hasEmbedFields = Boolean(
+        embedTitle.trim() ||
+        embedDesc.trim() ||
+        embedImage.trim() ||
+        embedThumbnail.trim() ||
+        embedFooter.trim()
+      );
+
+      if (msgMode === 'text' && !hasEmbedFields) {
         payload.content = textContent;
       } else {
         if (textContent.trim()) {
@@ -392,8 +400,21 @@ export default function SendMessagePage({ params }: PageProps) {
                 placeholder="Type your message here... Supports standard Discord markdown formatting."
                 value={textContent}
                 onChange={(e) => setTextContent(e.target.value)}
-                rows={8}
+                rows={6}
               />
+              <div style={{ marginTop: '16px' }}>
+                <label className="form-label">Attached Image URL (Optional)</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="e.g. https://i.postimg.cc/Jnb4SnT8/Rules.png"
+                  value={embedImage}
+                  onChange={(e) => setEmbedImage(e.target.value)}
+                />
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  🖼️ Paste an image link here to automatically send an image embed alongside your message text.
+                </span>
+              </div>
             </div>
           )}
 
