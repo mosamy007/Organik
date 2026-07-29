@@ -229,6 +229,63 @@ export async function assignGuildRole(guildId: string, userId: string, roleId: s
 }
 
 /**
+ * Helper to check if an embed contains an image URL and convert it to a direct Discord file attachment
+ */
+async function prepareAttachmentPayload(
+  content: string,
+  embeds?: any[],
+  components?: any[]
+): Promise<{ body: any; file?: { buffer: Buffer; name: string; mimeType: string } }> {
+  const body: any = {};
+  if (content) body.content = content;
+  if (components) body.components = components;
+
+  if (!embeds || embeds.length === 0) {
+    return { body };
+  }
+
+  const cleanEmbeds = JSON.parse(JSON.stringify(embeds));
+  let attachedFile: { buffer: Buffer; name: string; mimeType: string } | undefined = undefined;
+
+  for (const embed of cleanEmbeds) {
+    if (embed.image && embed.image.url && typeof embed.image.url === 'string' && embed.image.url.startsWith('http')) {
+      try {
+        const rawUrl = embed.image.url;
+        const res = await fetch(rawUrl, {
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          },
+        });
+        if (res.ok) {
+          const contentType = res.headers.get('content-type') || 'image/png';
+          let ext = 'png';
+          if (contentType.includes('jpeg') || contentType.includes('jpg')) ext = 'jpg';
+          if (contentType.includes('gif')) ext = 'gif';
+          if (contentType.includes('webp')) ext = 'webp';
+
+          const filename = `banner.${ext}`;
+          const arrayBuf = await res.arrayBuffer();
+          const buffer = Buffer.from(arrayBuf);
+
+          embed.image.url = `attachment://${filename}`;
+          attachedFile = {
+            buffer,
+            name: filename,
+            mimeType: contentType,
+          };
+          break; // Attach first embed image as direct file attachment
+        }
+      } catch (err) {
+        console.error('Failed to pre-fetch image for attachment conversion:', err);
+      }
+    }
+  }
+
+  body.embeds = cleanEmbeds;
+  return { body, file: attachedFile };
+}
+
+/**
  * Sends a message (optionally with an embed) to a specific channel.
  */
 export async function sendChannelMessage(
@@ -239,19 +296,31 @@ export async function sendChannelMessage(
 ): Promise<{ success: boolean; messageId?: string; error?: string }> {
   if (!BOT_TOKEN) throw new Error('Missing Discord Bot Token.');
 
-  const body: any = {};
-  if (content) body.content = content;
-  if (embeds) body.embeds = embeds;
-  if (components) body.components = components;
+  const { body, file } = await prepareAttachmentPayload(content, embeds, components);
 
-  const res = await fetch(`${API_ENDPOINT}/channels/${channelId}/messages`, {
-    method: 'POST',
-    body: JSON.stringify(body),
-    headers: {
-      Authorization: `Bot ${BOT_TOKEN}`,
-      'Content-Type': 'application/json',
-    },
-  });
+  let res: Response;
+  if (file) {
+    const formData = new FormData();
+    formData.append('payload_json', JSON.stringify(body));
+    formData.append('files[0]', new Blob([new Uint8Array(file.buffer)], { type: file.mimeType }), file.name);
+
+    res = await fetch(`${API_ENDPOINT}/channels/${channelId}/messages`, {
+      method: 'POST',
+      body: formData,
+      headers: {
+        Authorization: `Bot ${BOT_TOKEN}`,
+      },
+    });
+  } else {
+    res = await fetch(`${API_ENDPOINT}/channels/${channelId}/messages`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+      headers: {
+        Authorization: `Bot ${BOT_TOKEN}`,
+        'Content-Type': 'application/json',
+      },
+    });
+  }
 
   if (!res.ok) {
     const errText = await res.text();
