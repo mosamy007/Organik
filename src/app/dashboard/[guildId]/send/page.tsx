@@ -164,9 +164,9 @@ export default function SendMessagePage({ params }: PageProps) {
       return;
     }
 
-    if (msgMode === 'embed' && !embedTitle.trim() && !embedDesc.trim()) {
+    if (msgMode === 'embed' && !embedTitle.trim() && !embedDesc.trim() && !embedImage.trim() && !embedThumbnail.trim() && !textContent.trim()) {
       setStatus('error');
-      setStatusMessage('Please enter at least a title or description for the embed.');
+      setStatusMessage('Please fill in at least an embed title, description, image URL, or text content.');
       return;
     }
 
@@ -186,15 +186,18 @@ export default function SendMessagePage({ params }: PageProps) {
       if (msgMode === 'text') {
         payload.content = textContent;
       } else {
+        if (textContent.trim()) {
+          payload.content = textContent.trim();
+        }
         // Convert hex color to decimal
         const decColor = parseInt(embedColor.replace('#', ''), 16) || 5793010;
         payload.embed = {
-          title: embedTitle || undefined,
-          description: embedDesc || undefined,
+          title: embedTitle ? embedTitle.trim() : undefined,
+          description: embedDesc ? embedDesc.trim() : undefined,
           color: decColor,
-          footer: embedFooter ? { text: embedFooter } : undefined,
-          thumbnail: embedThumbnail ? { url: embedThumbnail } : undefined,
-          image: embedImage ? { url: embedImage } : undefined,
+          footer: embedFooter ? { text: embedFooter.trim() } : undefined,
+          thumbnail: embedThumbnail ? { url: embedThumbnail.trim() } : undefined,
+          image: embedImage ? { url: embedImage.trim() } : undefined,
           timestamp: new Date().toISOString(),
         };
       }
@@ -397,9 +400,20 @@ export default function SendMessagePage({ params }: PageProps) {
           {/* Embed Editor */}
           {msgMode === 'embed' && (
             <div style={styles.embedForm} className="animate-fade-in">
+              <div className="form-group" style={{ marginBottom: '16px' }}>
+                <label className="form-label">Message Text Above Embed (Optional)</label>
+                <input
+                  type="text"
+                  className="form-input"
+                  placeholder="Optional text announcement above the embed card..."
+                  value={textContent}
+                  onChange={(e) => setTextContent(e.target.value)}
+                />
+              </div>
+
               <div className="form-row-inline">
                 <div className="form-group" style={{ flex: 2 }}>
-                  <label className="form-label">Embed Title</label>
+                  <label className="form-label">Embed Title (Optional)</label>
                   <input
                     type="text"
                     className="form-input"
