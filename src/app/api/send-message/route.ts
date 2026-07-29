@@ -55,6 +55,13 @@ export function processEmbed(embed: any): any {
     }
   }
 
+  // Discord UI Client Requirement:
+  // An embed without title, description, or author is hidden by Discord's client UI.
+  // If title & description are empty, anchor with an invisible zero-width space ('\u200b').
+  if (!cleanEmbed.title && !cleanEmbed.description && (cleanEmbed.image || cleanEmbed.thumbnail)) {
+    cleanEmbed.description = '\u200b';
+  }
+
   return cleanEmbed;
 }
 
