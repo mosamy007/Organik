@@ -13,6 +13,51 @@ function normalizeUrl(rawUrl: string | undefined): string {
   return trimmed;
 }
 
+export function normalizeImageUrl(rawUrl: string | undefined | null): string | undefined {
+  if (!rawUrl) return undefined;
+  let trimmed = rawUrl.trim();
+  if (!trimmed) return undefined;
+  if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
+    trimmed = 'https://' + trimmed;
+  }
+  const postimgMatch = trimmed.match(/^https?:\/\/postimg\.cc\/([a-zA-Z0-9]+)$/);
+  if (postimgMatch) {
+    trimmed = `https://i.postimg.cc/${postimgMatch[1]}/image.png`;
+  }
+  const imgurMatch = trimmed.match(/^https?:\/\/(?:www\.)?imgur\.com\/([a-zA-Z0-9]+)$/);
+  if (imgurMatch) {
+    trimmed = `https://i.imgur.com/${imgurMatch[1]}.png`;
+  }
+  return trimmed;
+}
+
+export function processEmbed(embed: any): any {
+  if (!embed) return undefined;
+  const cleanEmbed = { ...embed };
+
+  if (cleanEmbed.image) {
+    const rawImg = typeof cleanEmbed.image === 'string' ? cleanEmbed.image : cleanEmbed.image.url;
+    const norm = normalizeImageUrl(rawImg);
+    if (norm) {
+      cleanEmbed.image = { url: norm };
+    } else {
+      delete cleanEmbed.image;
+    }
+  }
+
+  if (cleanEmbed.thumbnail) {
+    const rawThumb = typeof cleanEmbed.thumbnail === 'string' ? cleanEmbed.thumbnail : cleanEmbed.thumbnail.url;
+    const norm = normalizeImageUrl(rawThumb);
+    if (norm) {
+      cleanEmbed.thumbnail = { url: norm };
+    } else {
+      delete cleanEmbed.thumbnail;
+    }
+  }
+
+  return cleanEmbed;
+}
+
 export async function GET(req: NextRequest) {
   const session = getSession(req);
   const { searchParams } = new URL(req.url);
@@ -114,7 +159,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const embeds = embed ? [embed] : undefined;
+    const processedEmbed = processEmbed(embed);
+    const embeds = processedEmbed ? [processedEmbed] : undefined;
 
     let components: any[] | undefined = undefined;
     if (Array.isArray(buttons) && buttons.length > 0) {
@@ -189,7 +235,8 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const embeds = embed ? [embed] : undefined;
+    const processedEmbed = processEmbed(embed);
+    const embeds = processedEmbed ? [processedEmbed] : undefined;
 
     let components: any[] | undefined = undefined;
     if (Array.isArray(buttons) && buttons.length > 0) {

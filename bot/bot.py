@@ -843,6 +843,20 @@ async def giveaway_post(interaction: discord.Interaction, giveaway_id: str):
                 tasks_str += f"- {task.get('label')}{req}\n"
             embed.add_field(name="📋 Requirements", value=tasks_str, inline=False)
 
+        image_url = giveaway.get("imageUrl")
+        if image_url:
+            image_url = str(image_url).strip()
+            if image_url:
+                if not image_url.startswith("http://") and not image_url.startswith("https://"):
+                    image_url = "https://" + image_url
+                m_postimg = re.match(r"^https?://postimg\.cc/([a-zA-Z0-9]+)$", image_url)
+                if m_postimg:
+                    image_url = f"https://i.postimg.cc/{m_postimg.group(1)}/image.png"
+                m_imgur = re.match(r"^https?://(?:www\.)?imgur\.com/([a-zA-Z0-9]+)$", image_url)
+                if m_imgur:
+                    image_url = f"https://i.imgur.com/{m_imgur.group(1)}.png"
+                embed.set_image(url=image_url)
+
         embed.set_footer(text="Click 'Enter Giveaway' to complete tasks and participate!")
         
         view = GiveawayLinkView(giveaway_id, str(interaction.guild_id))

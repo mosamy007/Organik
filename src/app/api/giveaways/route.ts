@@ -3,6 +3,7 @@ import { getDb } from '@/lib/mongodb';
 import { getSession } from '@/lib/session';
 import { verifyGuildAdmin } from '@/lib/auth-helpers';
 import { assignGuildRole, sendChannelMessage, getGuildMember } from '@/lib/discord-api';
+import { normalizeImageUrl } from '@/app/api/send-message/route';
 import { ObjectId } from 'mongodb';
 
 /**
@@ -184,7 +185,10 @@ export async function POST(req: NextRequest) {
         };
 
         if (newGiveaway.imageUrl) {
-          embed.image = { url: newGiveaway.imageUrl };
+          const normImg = normalizeImageUrl(newGiveaway.imageUrl);
+          if (normImg) {
+            embed.image = { url: normImg };
+          }
         }
 
         const components = [

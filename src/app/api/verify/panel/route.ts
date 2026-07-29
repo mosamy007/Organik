@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getSession } from '@/lib/session';
 import { verifyGuildAdmin } from '@/lib/auth-helpers';
 import { sendChannelMessage } from '@/lib/discord-api';
+import { normalizeImageUrl } from '@/app/api/send-message/route';
 
 export async function POST(req: NextRequest) {
   const session = getSession(req);
@@ -49,8 +50,11 @@ export async function POST(req: NextRequest) {
       },
     };
 
-    if (imageUrl && imageUrl.trim()) {
-      embed.image = { url: imageUrl.trim() };
+    if (imageUrl) {
+      const cleanImg = normalizeImageUrl(imageUrl);
+      if (cleanImg) {
+        embed.image = { url: cleanImg };
+      }
     }
 
     const components = [
