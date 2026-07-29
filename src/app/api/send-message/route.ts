@@ -13,6 +13,19 @@ function normalizeUrl(rawUrl: string | undefined): string {
   return trimmed;
 }
 
+export function extractImageUrlFromText(text: string | undefined | null): string | undefined {
+  if (!text) return undefined;
+  const m1 = text.match(/https?:\/\/[^\s<>\'\"]+\.(?:png|jpg|jpeg|gif|webp)(?:\?[^\s<>\'\"]*)?/i);
+  if (m1) return m1[0];
+  const m2 = text.match(/https?:\/\/i\.postimg\.cc\/[^\s<>\'\"]+/i);
+  if (m2) return m2[0];
+  const m3 = text.match(/https?:\/\/postimg\.cc\/[^\s<>\'\"]+/i);
+  if (m3) return m3[0];
+  const m4 = text.match(/https?:\/\/(?:i\.)?imgur\.com\/[^\s<>\'\"]+/i);
+  if (m4) return m4[0];
+  return undefined;
+}
+
 export function normalizeImageUrl(rawUrl: string | undefined | null): string | undefined {
   if (!rawUrl) return undefined;
   let trimmed = rawUrl.trim();
@@ -166,7 +179,17 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const processedEmbed = processEmbed(embed);
+    let finalEmbed = embed ? { ...embed } : undefined;
+    const detectedImg = extractImageUrlFromText(content) || extractImageUrlFromText(finalEmbed?.description);
+    if (detectedImg) {
+      if (!finalEmbed) {
+        finalEmbed = { color: 0x5865f2, image: { url: detectedImg } };
+      } else if (!finalEmbed.image || !finalEmbed.image.url) {
+        finalEmbed.image = { url: detectedImg };
+      }
+    }
+
+    const processedEmbed = processEmbed(finalEmbed);
     const embeds = processedEmbed ? [processedEmbed] : undefined;
 
     let components: any[] | undefined = undefined;
@@ -242,7 +265,17 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }
 
-    const processedEmbed = processEmbed(embed);
+    let finalEmbed = embed ? { ...embed } : undefined;
+    const detectedImg = extractImageUrlFromText(content) || extractImageUrlFromText(finalEmbed?.description);
+    if (detectedImg) {
+      if (!finalEmbed) {
+        finalEmbed = { color: 0x5865f2, image: { url: detectedImg } };
+      } else if (!finalEmbed.image || !finalEmbed.image.url) {
+        finalEmbed.image = { url: detectedImg };
+      }
+    }
+
+    const processedEmbed = processEmbed(finalEmbed);
     const embeds = processedEmbed ? [processedEmbed] : undefined;
 
     let components: any[] | undefined = undefined;
