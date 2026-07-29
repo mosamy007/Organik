@@ -1030,8 +1030,8 @@ async def on_interaction(interaction: discord.Interaction):
 
     custom_id = interaction.data.get("custom_id", "")
 
-    # 1. Handle Ticket Creation Panel buttons ("ticket_open" & "ticket_idea_open")
-    if custom_id in ["ticket_open", "ticket_idea_open"]:
+    # 1. Handle Ticket Creation Panel buttons ("ticket_open", "ticket_idea_open", "ticket_collab_open")
+    if custom_id in ["ticket_open", "ticket_idea_open", "ticket_collab_open"]:
         await interaction.response.defer(ephemeral=True)
         guild = interaction.guild
         user = interaction.user
@@ -1041,17 +1041,29 @@ async def on_interaction(interaction: discord.Interaction):
             return
 
         is_idea = (custom_id == "ticket_idea_open")
+        is_collab = (custom_id == "ticket_collab_open")
         guild_id = str(guild.id)
         user_id = str(user.id)
         clean_user_name = re.sub(r'[^a-zA-Z0-9]', '', user.name).lower()[:15] or "user"
         
-        channel_prefix = "💡-idea-" if is_idea else "ticket-"
+        if is_collab:
+            channel_prefix = "🤝-collab-"
+            ticket_label = "collab ticket"
+            topic_title = "Collab Ticket"
+        elif is_idea:
+            channel_prefix = "💡-idea-"
+            ticket_label = "idea ticket"
+            topic_title = "Idea Ticket"
+        else:
+            channel_prefix = "ticket-"
+            ticket_label = "support ticket"
+            topic_title = "Support Ticket"
+
         channel_name = f"{channel_prefix}{clean_user_name}"
 
         # Check if user already has an active ticket channel in this guild
         existing_channel = discord.utils.get(guild.text_channels, name=channel_name)
         if existing_channel:
-            ticket_label = "idea ticket" if is_idea else "support ticket"
             await interaction.followup.send(
                 f"⚠️ You already have an open {ticket_label}: {existing_channel.mention}",
                 ephemeral=True
@@ -1084,8 +1096,7 @@ async def on_interaction(interaction: discord.Interaction):
                 )
 
         try:
-            # Create channel with lamp icon for idea tickets
-            topic_title = "Idea Ticket" if is_idea else "Support Ticket"
+            # Create channel with handshake icon for collab tickets or lamp for idea tickets
             new_channel = await guild.create_text_channel(
                 name=channel_name,
                 overwrites=overwrites,
@@ -1094,7 +1105,16 @@ async def on_interaction(interaction: discord.Interaction):
             )
 
             # Send welcome embed inside ticket channel with Action Buttons
-            if is_idea:
+            if is_collab:
+                embed = discord.Embed(
+                    title=f"🤝 Collab Ticket — {user.name}",
+                    description=f"Welcome {user.mention}! Thank you for your interest in collaborating with us.\n\nPlease share your partnership proposal or collaboration details below!",
+                    color=0x3b82f6
+                )
+                embed.add_field(name="👤 Proposal Submitter", value=user.mention, inline=True)
+                embed.add_field(name="📌 Status", value="`Open`", inline=True)
+                embed.set_footer(text="Organik Bot Collab System • Click buttons below to manage ticket.")
+            elif is_idea:
                 embed = discord.Embed(
                     title=f"💡 Idea Ticket — {user.name}",
                     description=f"Welcome {user.mention}! Thank you for submitting your idea.\n\nPlease describe your suggestion or idea in detail below. Our team will review it!",
@@ -1121,8 +1141,7 @@ async def on_interaction(interaction: discord.Interaction):
             staff_mentions = " ".join([f"<@&{rid}>" for rid in staff_role_ids]) if staff_role_ids else ""
             await new_channel.send(content=f"{user.mention} {staff_mentions}".strip(), embed=embed, view=view)
 
-            msg_label = "idea ticket" if is_idea else "support ticket"
-            await interaction.followup.send(f"✅ Your {msg_label} has been created: {new_channel.mention}", ephemeral=True)
+            await interaction.followup.send(f"✅ Your {ticket_label} has been created: {new_channel.mention}", ephemeral=True)
         except Exception as create_err:
             print(f"[Tickets] Error creating ticket channel: {create_err}")
             await interaction.followup.send(f"❌ Failed to create ticket channel: {create_err}", ephemeral=True)
@@ -1132,7 +1151,7 @@ async def on_interaction(interaction: discord.Interaction):
         await interaction.response.defer()
         user = interaction.user
         channel = interaction.channel
-        if isinstance(channel, discord.TextChannel) and (channel.name.startswith("ticket-") or "idea" in channel.name or "💡" in channel.name):
+        if isinstance(channel, discord.TextChannel) and (channel.name.startswith("ticket-") or "idea" in channel.name or "collab" in channel.name or "💡" in channel.name or "🤝" in channel.name):
             embed = discord.Embed(
                 description=f"📋 **Ticket Claimed!** {user.mention} is now handling this ticket.",
                 color=0x10b981
@@ -1143,7 +1162,7 @@ async def on_interaction(interaction: discord.Interaction):
     elif custom_id == "ticket_close":
         await interaction.response.defer()
         channel = interaction.channel
-        if isinstance(channel, discord.TextChannel) and (channel.name.startswith("ticket-") or "idea" in channel.name or "💡" in channel.name):
+        if isinstance(channel, discord.TextChannel) and (channel.name.startswith("ticket-") or "idea" in channel.name or "collab" in channel.name or "💡" in channel.name or "🤝" in channel.name):
             embed = discord.Embed(
                 description=f"🔒 **Closing Ticket...** Channel will be deleted in **5 seconds**.",
                 color=0xef4444

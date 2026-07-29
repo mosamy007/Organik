@@ -64,9 +64,13 @@ export async function POST(req: NextRequest) {
       defaultTitle = '💡 Idea & Suggestions Desk';
       defaultDesc = 'Click the button below to open a private idea ticket and share your suggestions with our team!';
       defaultColor = '#facc15';
-    } else if (panelType === 'both') {
-      defaultTitle = '🎟️ Support & Idea Desk';
-      defaultDesc = 'Click a button below to open a private support ticket or submit an idea to our team.';
+    } else if (panelType === 'collab') {
+      defaultTitle = '🤝 Partnership & Collab Desk';
+      defaultDesc = 'Click the button below to open a private collab ticket and propose a partnership with our team!';
+      defaultColor = '#3b82f6';
+    } else if (panelType === 'all') {
+      defaultTitle = '🎟️ Server Support & Request Desk';
+      defaultDesc = 'Click a button below to open a support ticket, submit an idea, or propose a collaboration!';
       defaultColor = '#8b5cf6';
     }
 
@@ -79,8 +83,8 @@ export async function POST(req: NextRequest) {
       embedTitle: embedTitle || defaultTitle,
       embedDesc: embedDesc || defaultDesc,
       embedColor: embedColor || defaultColor,
-      buttonText: buttonText || (panelType === 'idea' ? 'Submit Idea' : 'Open Ticket'),
-      buttonEmoji: buttonEmoji || (panelType === 'idea' ? '💡' : '🎟️'),
+      buttonText: buttonText || (panelType === 'collab' ? 'Request Collab' : panelType === 'idea' ? 'Submit Idea' : 'Open Ticket'),
+      buttonEmoji: buttonEmoji || (panelType === 'collab' ? '🤝' : panelType === 'idea' ? '💡' : '🎟️'),
       updatedAt: new Date(),
     };
 
@@ -98,14 +102,14 @@ export async function POST(req: NextRequest) {
       title: config.embedTitle,
       description: config.embedDesc,
       color: colorInt,
-      footer: { text: panelType === 'idea' ? 'Organik Bot Idea System' : 'Organik Bot Ticket System' },
+      footer: { text: 'Organik Bot Ticket System' },
       timestamp: new Date().toISOString(),
     };
 
     // Construct button components based on panelType
     const buttonComponents: any[] = [];
 
-    if (panelType === 'both') {
+    if (panelType === 'all') {
       buttonComponents.push({
         type: 2, // Button
         style: 1, // Primary (Blurple)
@@ -115,10 +119,25 @@ export async function POST(req: NextRequest) {
       });
       buttonComponents.push({
         type: 2, // Button
-        style: 2, // Secondary / Yellow-ish
+        style: 2, // Secondary
         custom_id: 'ticket_idea_open',
         label: 'Submit Idea Ticket',
         emoji: { name: '💡' },
+      });
+      buttonComponents.push({
+        type: 2, // Button
+        style: 3, // Success / Green
+        custom_id: 'ticket_collab_open',
+        label: 'Request Collab Ticket',
+        emoji: { name: '🤝' },
+      });
+    } else if (panelType === 'collab') {
+      buttonComponents.push({
+        type: 2, // Button
+        style: 1, // Primary
+        custom_id: 'ticket_collab_open',
+        label: config.buttonText || 'Request Collab',
+        emoji: config.buttonEmoji ? { name: config.buttonEmoji } : { name: '🤝' },
       });
     } else if (panelType === 'idea') {
       buttonComponents.push({

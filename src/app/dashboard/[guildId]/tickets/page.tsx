@@ -17,7 +17,7 @@ export default function TicketsPage({ params }: PageProps) {
   const [loadingData, setLoadingData] = useState(true);
 
   // Form State
-  const [panelType, setPanelType] = useState<'support' | 'idea' | 'both'>('support');
+  const [panelType, setPanelType] = useState<'support' | 'idea' | 'collab' | 'all'>('support');
   const [selectedChannelId, setSelectedChannelId] = useState('');
   const [staffRoleIds, setStaffRoleIds] = useState<string[]>([]);
   const [embedTitle, setEmbedTitle] = useState('🎟️ Support & Help Desk');
@@ -77,7 +77,7 @@ export default function TicketsPage({ params }: PageProps) {
     fetchData();
   }, [guildId]);
 
-  const handlePanelTypeChange = (type: 'support' | 'idea' | 'both') => {
+  const handlePanelTypeChange = (type: 'support' | 'idea' | 'collab' | 'all') => {
     setPanelType(type);
     if (type === 'idea') {
       setEmbedTitle('💡 Idea & Suggestions Desk');
@@ -85,9 +85,15 @@ export default function TicketsPage({ params }: PageProps) {
       setEmbedColor('#facc15');
       setButtonText('Submit Idea');
       setButtonEmoji('💡');
-    } else if (type === 'both') {
-      setEmbedTitle('🎟️ Support & Idea Desk');
-      setEmbedDesc('Click a button below to open a private support ticket or submit an idea to our team.');
+    } else if (type === 'collab') {
+      setEmbedTitle('🤝 Partnership & Collab Desk');
+      setEmbedDesc('Click the button below to open a private collab ticket and propose a partnership with our team!');
+      setEmbedColor('#3b82f6');
+      setButtonText('Request Collab');
+      setButtonEmoji('🤝');
+    } else if (type === 'all') {
+      setEmbedTitle('🎟️ Server Support & Request Desk');
+      setEmbedDesc('Click a button below to open a support ticket, submit an idea, or propose a collaboration!');
       setEmbedColor('#8b5cf6');
       setButtonText('Open Support Ticket');
       setButtonEmoji('🎟️');
@@ -209,20 +215,37 @@ export default function TicketsPage({ params }: PageProps) {
               </button>
               <button
                 type="button"
-                onClick={() => handlePanelTypeChange('both')}
+                onClick={() => handlePanelTypeChange('collab')}
                 style={{
                   flex: 1,
-                  padding: '10px 8px',
+                  padding: '10px 6px',
                   borderRadius: '8px',
-                  border: panelType === 'both' ? '2px solid #8b5cf6' : '1px solid var(--border-color)',
-                  background: panelType === 'both' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
-                  color: panelType === 'both' ? '#c084fc' : 'var(--text-secondary)',
+                  border: panelType === 'collab' ? '2px solid #3b82f6' : '1px solid var(--border-color)',
+                  background: panelType === 'collab' ? 'rgba(59, 130, 246, 0.2)' : 'transparent',
+                  color: panelType === 'collab' ? '#60a5fa' : 'var(--text-secondary)',
                   fontWeight: '600',
-                  fontSize: '0.85rem',
+                  fontSize: '0.82rem',
                   cursor: 'pointer',
                 }}
               >
-                🎟️💡 Combined
+                🤝 Collab
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePanelTypeChange('all')}
+                style={{
+                  flex: 1,
+                  padding: '10px 6px',
+                  borderRadius: '8px',
+                  border: panelType === 'all' ? '2px solid #8b5cf6' : '1px solid var(--border-color)',
+                  background: panelType === 'all' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
+                  color: panelType === 'all' ? '#c084fc' : 'var(--text-secondary)',
+                  fontWeight: '600',
+                  fontSize: '0.82rem',
+                  cursor: 'pointer',
+                }}
+              >
+                🎟️💡🤝 All-in-One
               </button>
             </div>
           </div>
