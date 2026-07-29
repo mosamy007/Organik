@@ -30,13 +30,21 @@ export function normalizeImageUrl(rawUrl: string | undefined | null): string | u
   if (!rawUrl) return undefined;
   let trimmed = rawUrl.trim();
   if (!trimmed) return undefined;
+
+  // Don't double proxy if already proxied
+  if (trimmed.includes('/api/image-proxy?url=')) {
+    return trimmed;
+  }
+
   if (!trimmed.startsWith('http://') && !trimmed.startsWith('https://')) {
     trimmed = 'https://' + trimmed;
   }
-  const postimgMatch = trimmed.match(/^https?:\/\/postimg\.cc\/([a-zA-Z0-9]+)$/);
-  if (postimgMatch) {
-    trimmed = `https://i.postimg.cc/${postimgMatch[1]}/image.png`;
+
+  // Wrap Postimg links with server image proxy to bypass Discord proxy 403 blocking
+  if (trimmed.includes('postimg.cc')) {
+    return `https://www.organikbot.com/api/image-proxy?url=${encodeURIComponent(trimmed)}`;
   }
+
   const imgurMatch = trimmed.match(/^https?:\/\/(?:www\.)?imgur\.com\/([a-zA-Z0-9]+)$/);
   if (imgurMatch) {
     trimmed = `https://i.imgur.com/${imgurMatch[1]}.png`;
