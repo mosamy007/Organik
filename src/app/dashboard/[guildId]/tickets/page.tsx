@@ -17,13 +17,14 @@ export default function TicketsPage({ params }: PageProps) {
   const [loadingData, setLoadingData] = useState(true);
 
   // Form State
+  const [panelType, setPanelType] = useState<'support' | 'idea' | 'both'>('support');
   const [selectedChannelId, setSelectedChannelId] = useState('');
   const [staffRoleIds, setStaffRoleIds] = useState<string[]>([]);
-  const [embedTitle, setEmbedTitle] = useState('?? Support & Help Desk');
+  const [embedTitle, setEmbedTitle] = useState('🎟️ Support & Help Desk');
   const [embedDesc, setEmbedDesc] = useState('Click the button below to open a private support ticket with our server team.');
   const [embedColor, setEmbedColor] = useState('#5865f2');
   const [buttonText, setButtonText] = useState('Open Ticket');
-  const [buttonEmoji, setButtonEmoji] = useState('??');
+  const [buttonEmoji, setButtonEmoji] = useState('🎟️');
 
   // Status
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
@@ -56,6 +57,7 @@ export default function TicketsPage({ params }: PageProps) {
           const cfgData = await configRes.json();
           if (cfgData.config) {
             const cfg = cfgData.config;
+            if (cfg.panelType) setPanelType(cfg.panelType);
             if (cfg.channelId) setSelectedChannelId(cfg.channelId);
             if (cfg.staffRoleIds) setStaffRoleIds(cfg.staffRoleIds);
             if (cfg.embedTitle) setEmbedTitle(cfg.embedTitle);
@@ -74,6 +76,29 @@ export default function TicketsPage({ params }: PageProps) {
 
     fetchData();
   }, [guildId]);
+
+  const handlePanelTypeChange = (type: 'support' | 'idea' | 'both') => {
+    setPanelType(type);
+    if (type === 'idea') {
+      setEmbedTitle('💡 Idea & Suggestions Desk');
+      setEmbedDesc('Click the button below to open a private idea ticket and share your suggestions with our team!');
+      setEmbedColor('#facc15');
+      setButtonText('Submit Idea');
+      setButtonEmoji('💡');
+    } else if (type === 'both') {
+      setEmbedTitle('🎟️ Support & Idea Desk');
+      setEmbedDesc('Click a button below to open a private support ticket or submit an idea to our team.');
+      setEmbedColor('#8b5cf6');
+      setButtonText('Open Support Ticket');
+      setButtonEmoji('🎟️');
+    } else {
+      setEmbedTitle('🎟️ Support & Help Desk');
+      setEmbedDesc('Click the button below to open a private support ticket with our server team.');
+      setEmbedColor('#5865f2');
+      setButtonText('Open Ticket');
+      setButtonEmoji('🎟️');
+    }
+  };
 
   const toggleStaffRole = (roleId: string) => {
     if (staffRoleIds.includes(roleId)) {
@@ -102,6 +127,7 @@ export default function TicketsPage({ params }: PageProps) {
           guildId,
           channelId: selectedChannelId,
           staffRoleIds,
+          panelType,
           embedTitle,
           embedDesc,
           embedColor,
@@ -143,6 +169,63 @@ export default function TicketsPage({ params }: PageProps) {
           <h2 style={{ fontSize: '1.25rem', marginBottom: '20px', display: 'flex', alignItems: 'center', gap: '8px' }}>
             <Lock size={18} color="var(--primary)" /> Ticket System Setup
           </h2>
+
+          <div style={{ marginBottom: '20px' }}>
+            <label className="form-label">Panel Type</label>
+            <div style={{ display: 'flex', gap: '8px', marginTop: '6px' }}>
+              <button
+                type="button"
+                onClick={() => handlePanelTypeChange('support')}
+                style={{
+                  flex: 1,
+                  padding: '10px 8px',
+                  borderRadius: '8px',
+                  border: panelType === 'support' ? '2px solid #5865f2' : '1px solid var(--border-color)',
+                  background: panelType === 'support' ? 'rgba(88, 101, 242, 0.2)' : 'transparent',
+                  color: panelType === 'support' ? '#818cf8' : 'var(--text-secondary)',
+                  fontWeight: '600',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
+                🎟️ Support Ticket
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePanelTypeChange('idea')}
+                style={{
+                  flex: 1,
+                  padding: '10px 8px',
+                  borderRadius: '8px',
+                  border: panelType === 'idea' ? '2px solid #facc15' : '1px solid var(--border-color)',
+                  background: panelType === 'idea' ? 'rgba(250, 204, 21, 0.2)' : 'transparent',
+                  color: panelType === 'idea' ? '#fde047' : 'var(--text-secondary)',
+                  fontWeight: '600',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
+                💡 Idea Ticket
+              </button>
+              <button
+                type="button"
+                onClick={() => handlePanelTypeChange('both')}
+                style={{
+                  flex: 1,
+                  padding: '10px 8px',
+                  borderRadius: '8px',
+                  border: panelType === 'both' ? '2px solid #8b5cf6' : '1px solid var(--border-color)',
+                  background: panelType === 'both' ? 'rgba(139, 92, 246, 0.2)' : 'transparent',
+                  color: panelType === 'both' ? '#c084fc' : 'var(--text-secondary)',
+                  fontWeight: '600',
+                  fontSize: '0.85rem',
+                  cursor: 'pointer',
+                }}
+              >
+                🎟️💡 Combined
+              </button>
+            </div>
+          </div>
 
           <form onSubmit={handleDeployPanel} style={styles.form}>
             {/* Target Channel */}

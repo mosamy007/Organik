@@ -36,6 +36,7 @@ export async function POST(req: NextRequest) {
       guildId,
       channelId,
       staffRoleIds,
+      panelType = 'support',
       embedTitle,
       embedDesc,
       embedColor,
@@ -54,16 +55,32 @@ export async function POST(req: NextRequest) {
 
     const db = await getDb();
 
+    // Default configuration values depending on panelType
+    let defaultTitle = '🎟️ Support & Help Desk';
+    let defaultDesc = 'Click the button below to open a private support ticket with our server team.';
+    let defaultColor = '#5865f2';
+
+    if (panelType === 'idea') {
+      defaultTitle = '💡 Idea & Suggestions Desk';
+      defaultDesc = 'Click the button below to open a private idea ticket and share your suggestions with our team!';
+      defaultColor = '#facc15';
+    } else if (panelType === 'both') {
+      defaultTitle = '🎟️ Support & Idea Desk';
+      defaultDesc = 'Click a button below to open a private support ticket or submit an idea to our team.';
+      defaultColor = '#8b5cf6';
+    }
+
     // Save ticket configuration to MongoDB
     const config = {
       guildId,
       channelId,
       staffRoleIds: Array.isArray(staffRoleIds) ? staffRoleIds : [],
-      embedTitle: embedTitle || '?? Support & Help Desk',
-      embedDesc: embedDesc || 'Click the button below to open a private support ticket with our server team.',
-      embedColor: embedColor || '#5865f2',
-      buttonText: buttonText || 'Open Ticket',
-      buttonEmoji: buttonEmoji || '??',
+      panelType,
+      embedTitle: embedTitle || defaultTitle,
+      embedDesc: embedDesc || defaultDesc,
+      embedColor: embedColor || defaultColor,
+      buttonText: buttonText || (panelType === 'idea' ? 'Submit Idea' : 'Open Ticket'),
+      buttonEmoji: buttonEmoji || (panelType === 'idea' ? '💡' : '🎟️'),
       updatedAt: new Date(),
     };
 
@@ -74,30 +91,57 @@ export async function POST(req: NextRequest) {
     );
 
     // Convert hex color to integer
-    const colorInt = parseInt((embedColor || '#5865f2').replace('#', ''), 16) || 5793010;
+    const colorInt = parseInt((config.embedColor).replace('#', ''), 16) || 5793010;
 
     // Construct panel embed
     const embed = {
       title: config.embedTitle,
       description: config.embedDesc,
       color: colorInt,
-      footer: { text: 'Organik Bot Support System' },
+      footer: { text: panelType === 'idea' ? 'Organik Bot Idea System' : 'Organik Bot Ticket System' },
       timestamp: new Date().toISOString(),
     };
 
-    // Construct button component
+    // Construct button components based on panelType
+    const buttonComponents: any[] = [];
+
+    if (panelType === 'both') {
+      buttonComponents.push({
+        type: 2, // Button
+        style: 1, // Primary (Blurple)
+        custom_id: 'ticket_open',
+        label: 'Open Support Ticket',
+        emoji: { name: '🎟️' },
+      });
+      buttonComponents.push({
+        type: 2, // Button
+        style: 2, // Secondary / Yellow-ish
+        custom_id: 'ticket_idea_open',
+        label: 'Submit Idea Ticket',
+        emoji: { name: '💡' },
+      });
+    } else if (panelType === 'idea') {
+      buttonComponents.push({
+        type: 2, // Button
+        style: 2, // Secondary
+        custom_id: 'ticket_idea_open',
+        label: config.buttonText || 'Submit Idea',
+        emoji: config.buttonEmoji ? { name: config.buttonEmoji } : { name: '💡' },
+      });
+    } else {
+      buttonComponents.push({
+        type: 2, // Button
+        style: 1, // Primary
+        custom_id: 'ticket_open',
+        label: config.buttonText || 'Open Ticket',
+        emoji: config.buttonEmoji ? { name: config.buttonEmoji } : { name: '🎟️' },
+      });
+    }
+
     const components = [
       {
         type: 1, // ActionRow
-        components: [
-          {
-            type: 2, // Button
-            style: 1, // Primary (Blurple)
-            custom_id: 'ticket_open',
-            label: config.buttonText,
-            emoji: config.buttonEmoji ? { name: config.buttonEmoji } : { name: '??' },
-          },
-        ],
+        components: buttonComponents,
       },
     ];
 
