@@ -677,6 +677,89 @@ class GiveawayLinkView(discord.ui.View):
             )
         )
 
+# Gloombles Stats Polling Loop
+@tasks.loop(seconds=300)
+async def gloombles_polling_loop():
+    if db is None:
+        return
+    try:
+        active_trackers = db["gloombles_tracker"].find({"enabled": True, "channelId": {"$ne": ""}})
+        for config in active_trackers:
+            guild_id = config.get("guildId")
+            channel_id = config.get("channelId")
+            message_id = config.get("messageId")
+
+            if not channel_id:
+                continue
+
+            try:
+                res = requests.get("https://gloombles.com/api/stats", timeout=10)
+                if res.status_code != 200:
+                    continue
+                stats = res.json()
+            except Exception as e:
+                print(f"[Gloombles Loop] Error fetching stats: {e}")
+                continue
+
+            embed = discord.Embed(
+                title="👾 GLOOMBLES LIVE METRICS",
+                description="Live collection metrics straight from the Ethereum blockchain.",
+                color=0x8b5cf6,
+                url="https://gloombles.com/stats"
+            )
+
+            coll_size = stats.get("collectionSize", "N/A")
+            minted = stats.get("mintedAllTime", "N/A")
+            burned = (stats.get("burned") or 0) + (stats.get("deadBurned") or 0)
+            merges = stats.get("merges", "N/A")
+            rolls = stats.get("totalRolls", "N/A")
+            untouched = stats.get("untouched", "N/A")
+
+            mythics = stats.get("mythic", "N/A")
+            grails = stats.get("grails", "N/A")
+            epics = stats.get("epics", "N/A")
+            legendaries = stats.get("legendaries", "N/A")
+
+            embed.add_field(name="📦 Total Supply", value=f"`{coll_size}`", inline=True)
+            embed.add_field(name="🪙 Minted All-Time", value=f"`{minted}`", inline=True)
+            embed.add_field(name="🔥 Total Burned", value=f"`{burned}`", inline=True)
+
+            embed.add_field(name="🎲 Total Re-rolls", value=f"`{rolls}`", inline=True)
+            embed.add_field(name="🧬 Merges Done", value=f"`{merges}`", inline=True)
+            embed.add_field(name="📦 Untouched", value=f"`{untouched}`", inline=True)
+
+            embed.add_field(name="👑 Mythics", value=f"`{mythics}`", inline=True)
+            embed.add_field(name="✨ Grails", value=f"`{grails}`", inline=True)
+            embed.add_field(name="🟣 Epics", value=f"`{epics}`", inline=True)
+            embed.add_field(name="🟡 Legendaries", value=f"`{legendaries}`", inline=True)
+
+            embed.set_footer(text="Live Auto-Update • Refreshed every 5 mins • gloombles.com")
+            embed.timestamp = datetime.datetime.now(datetime.timezone.utc)
+
+            channel = bot.get_channel(int(channel_id))
+            if not channel:
+                try:
+                    channel = await bot.fetch_channel(int(channel_id))
+                except Exception:
+                    continue
+
+            if message_id:
+                try:
+                    msg = await channel.fetch_message(int(message_id))
+                    await msg.edit(embed=embed)
+                    continue
+                except Exception:
+                    pass
+
+            sent_msg = await channel.send(embed=embed)
+            db["gloombles_tracker"].update_one(
+                {"guildId": guild_id},
+                {"$set": {"messageId": str(sent_msg.id), "lastUpdated": datetime.datetime.now(datetime.timezone.utc)}}
+            )
+
+    except Exception as e:
+        print(f"[Gloombles Loop] Error in background task: {e}")
+
 @bot.event
 async def on_ready():
     # Register persistent verification view
@@ -695,6 +778,9 @@ async def on_ready():
     if not sales_polling_loop.is_running():
         sales_polling_loop.start()
         print("[SUCCESS] Started NFT sales polling loop task.")
+    if not gloombles_polling_loop.is_running():
+        gloombles_polling_loop.start()
+        print("[SUCCESS] Started Gloombles live stats polling loop task.")
 
     print(f"[READY] Organik Bot is active and logged in as: {bot.user}")
 

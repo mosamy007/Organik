@@ -4,7 +4,7 @@ import React, { useState, useEffect, use } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useDiscordAuth } from '@/components/DiscordAuthProvider';
-import { MessageSquare, Shield, Gift, ArrowLeft, Disc, ShieldAlert, Share2, Ticket } from 'lucide-react';
+import { MessageSquare, Shield, Gift, ArrowLeft, Disc, ShieldAlert, Share2, Ticket, BarChart2 } from 'lucide-react';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -144,6 +144,13 @@ export default function GuildDashboardLayout({ children, params }: LayoutProps) 
           >
             <Share2 size={18} />
             <span className="nav-label">Integrations</span>
+          </Link>
+          <Link
+            href={`/dashboard/${guildId}/gloombles-stats`}
+            style={pathname.endsWith('/gloombles-stats') ? styles.activeNavLink : styles.navLink}
+          >
+            <BarChart2 size={18} />
+            <span className="nav-label">Gloombles Stats</span>
           </Link>
         </nav>
 
