@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, use } from 'react';
 import { Gift, Plus, Trash2, Clock, Users, ShieldAlert, CheckCircle2, Trophy, HelpCircle } from 'lucide-react';
+import ImageUploader from '@/components/ImageUploader';
 
 interface PageProps {
   params: Promise<{ guildId: string }>;
@@ -454,14 +455,12 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
                 )}
               </div>
 
-              <div className="form-group" style={{ flex: 1 }}>
-                <label className="form-label">Giveaway Image URL (Optional)</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="https://example.com/giveaway-banner.png"
+              <div style={{ flex: 1 }}>
+                <ImageUploader
+                  label="Giveaway Image (URL or Upload File)"
                   value={imageUrl}
-                  onChange={(e) => setImageUrl(e.target.value)}
+                  onChange={setImageUrl}
+                  placeholder="https://... or click Upload File"
                 />
               </div>
             </div>

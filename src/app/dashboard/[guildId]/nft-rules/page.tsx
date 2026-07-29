@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, use } from 'react';
 import { Shield, Plus, Trash2, CheckCircle2, ShieldAlert, AlertCircle, HelpCircle } from 'lucide-react';
+import ImageUploader from '@/components/ImageUploader';
 
 interface PageProps {
   params: Promise<{ guildId: string }>;
@@ -690,16 +691,12 @@ export default function NftRulesPage({ params }: PageProps) {
                 />
               </div>
 
-              <div className="form-group">
-                <label className="form-label">Verification Image URL (Optional)</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  value={embedImageUrl}
-                  onChange={(e) => setEmbedImageUrl(e.target.value)}
-                  placeholder="https://example.com/banner.png"
-                />
-              </div>
+              <ImageUploader
+                label="Verification Panel Image (URL or Upload File)"
+                value={embedImageUrl}
+                onChange={setEmbedImageUrl}
+                placeholder="https://... or click Upload File"
+              />
 
               {panelStatus === 'success' && (
                 <div style={styles.statusSuccess}>

@@ -3,6 +3,7 @@
 import React, { useState, useEffect, use } from 'react';
 import { useDiscordAuth } from '@/components/DiscordAuthProvider';
 import { MessageSquare, Send, CheckCircle2, ShieldAlert, Sparkles, Plus, Trash2, ExternalLink, MousePointerClick, Edit3, Search, FileEdit } from 'lucide-react';
+import ImageUploader from '@/components/ImageUploader';
 
 interface PageProps {
   params: Promise<{ guildId: string }>;
@@ -403,17 +404,12 @@ export default function SendMessagePage({ params }: PageProps) {
                 rows={6}
               />
               <div style={{ marginTop: '16px' }}>
-                <label className="form-label">Attached Image URL (Optional)</label>
-                <input
-                  type="text"
-                  className="form-input"
-                  placeholder="e.g. https://i.postimg.cc/Jnb4SnT8/Rules.png"
+                <ImageUploader
+                  label="Attached Image (URL or Upload File)"
                   value={embedImage}
-                  onChange={(e) => setEmbedImage(e.target.value)}
+                  onChange={setEmbedImage}
+                  placeholder="https://... or click Upload File"
                 />
-                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
-                  🖼️ Paste an image link here to automatically send an image embed alongside your message text.
-                </span>
               </div>
             </div>
           )}
@@ -476,25 +472,21 @@ export default function SendMessagePage({ params }: PageProps) {
                 />
               </div>
 
-              <div className="form-row-inline">
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label">Thumbnail URL</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="https://..."
+              <div className="form-row-inline" style={{ marginTop: '16px' }}>
+                <div style={{ flex: 1 }}>
+                  <ImageUploader
+                    label="Thumbnail Image"
                     value={embedThumbnail}
-                    onChange={(e) => setEmbedThumbnail(e.target.value)}
+                    onChange={setEmbedThumbnail}
+                    placeholder="Small corner icon..."
                   />
                 </div>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label">Image URL</label>
-                  <input
-                    type="text"
-                    className="form-input"
-                    placeholder="https://..."
+                <div style={{ flex: 1 }}>
+                  <ImageUploader
+                    label="Main Embed Image"
                     value={embedImage}
-                    onChange={(e) => setEmbedImage(e.target.value)}
+                    onChange={setEmbedImage}
+                    placeholder="Large main banner image..."
                   />
                 </div>
               </div>
