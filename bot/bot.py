@@ -20,7 +20,9 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 import re
 import json
+import requests
 import twikit
+from datetime import datetime, timedelta, timezone
 
 # Initialize twikit client
 twikit_client = twikit.Client('en-US')
@@ -83,7 +85,7 @@ def create_one_time_token(discord_id: str, username: str, avatar_url: str) -> st
                 "discordId": discord_id,
                 "username": username,
                 "avatar": avatar_url,
-                "expiresAt": datetime.utcnow() + timedelta(minutes=10)
+                "expiresAt": datetime.now(timezone.utc) + timedelta(minutes=10)
             })
             return token
         except Exception as e:
@@ -538,7 +540,7 @@ async def sales_polling_loop():
                     else:
                         continue
 
-                events = fetch_opensea_sales(slug)
+                events = await asyncio.to_thread(fetch_opensea_sales, slug)
                 if not events:
                     continue
 
@@ -693,7 +695,7 @@ async def gloombles_polling_loop():
                 continue
 
             try:
-                res = requests.get("https://gloombles.com/api/stats", timeout=10)
+                res = await asyncio.to_thread(requests.get, "https://gloombles.com/api/stats", timeout=10)
                 if res.status_code != 200:
                     continue
                 stats = res.json()
