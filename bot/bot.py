@@ -20,7 +20,6 @@ import urllib.parse
 import xml.etree.ElementTree as ET
 import re
 import json
-import requests
 import twikit
 from datetime import datetime, timedelta, timezone
 
@@ -695,10 +694,11 @@ async def gloombles_polling_loop():
                 continue
 
             try:
-                res = await asyncio.to_thread(requests.get, "https://gloombles.com/api/stats", timeout=10)
-                if res.status_code != 200:
-                    continue
-                stats = res.json()
+                def _fetch_stats():
+                    req = urllib.request.Request("https://gloombles.com/api/stats", headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req, timeout=10) as resp:
+                        return json.loads(resp.read().decode('utf-8'))
+                stats = await asyncio.to_thread(_fetch_stats)
             except Exception as e:
                 print(f"[Gloombles Loop] Error fetching stats: {e}")
                 continue
