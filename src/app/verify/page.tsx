@@ -154,6 +154,14 @@ function VerifyPortalContent() {
     ? linkedWallets.includes(walletAddress.toLowerCase())
     : false;
 
+  // Auto-reset success status when switching to an unlinked wallet
+  useEffect(() => {
+    if (walletAddress && !isCurrentWalletAlreadyLinked && status === 'success') {
+      setStatus('idle');
+      setStatusMessage('');
+    }
+  }, [walletAddress, isCurrentWalletAlreadyLinked, status]);
+
   return (
     <div style={styles.pageWrapper}>
       <div style={styles.portalCard} className="glass-card animate-fade-in">
@@ -283,8 +291,8 @@ function VerifyPortalContent() {
           </div>
         </div>
 
-        {/* Main CTA */}
-        {status !== 'success' && (
+        {/* Main CTA: Always show if wallet is connected and not yet linked or status is not success */}
+        {(status !== 'success' || (isConnected && walletAddress && !isCurrentWalletAlreadyLinked)) && (
           <div style={styles.ctaWrapper}>
             <button
               onClick={handleLinkWallet}
@@ -326,6 +334,26 @@ function VerifyPortalContent() {
                   <p style={styles.successText}>
                     {statusMessage} You can return to Discord and click **"Verify NFT Roles"** to update your server roles.
                   </p>
+                  <div style={{ marginTop: '12px', display: 'flex', gap: '10px' }}>
+                    <button
+                      onClick={() => {
+                        setStatus('idle');
+                        setStatusMessage('');
+                      }}
+                      style={{
+                        background: 'rgba(255, 255, 255, 0.08)',
+                        border: '1px solid rgba(255, 255, 255, 0.15)',
+                        color: '#fff',
+                        fontSize: '0.85rem',
+                        padding: '6px 14px',
+                        borderRadius: '8px',
+                        cursor: 'pointer',
+                        fontWeight: '600',
+                      }}
+                    >
+                      🔗 Link Another Wallet
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
