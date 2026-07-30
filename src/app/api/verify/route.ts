@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
       let matchedWallet = qualifyingWallet;
 
       for (const rule of rules) {
-        const { contractAddress, network, ruleType, minQuantity, traitType, traitValue, roleId } = rule;
+        const { contractAddress, network, ruleType, minQuantity, maxQuantity, traitType, traitValue, roleId } = rule;
         let isEligible = false;
         let matchedWalletForThisRule = '';
 
@@ -119,8 +119,9 @@ export async function POST(req: NextRequest) {
                 matchedWalletForThisRule = addr;
               }
             }
-            const threshold = minQuantity || 1;
-            isEligible = totalBalance >= threshold;
+            const minThreshold = minQuantity || 1;
+            const maxThreshold = maxQuantity ? Number(maxQuantity) : null;
+            isEligible = totalBalance >= minThreshold && (maxThreshold === null || totalBalance <= maxThreshold);
           } else if (ruleType === 'trait') {
             for (const addr of walletAddresses) {
               // 1. Try OpenSea first
@@ -314,7 +315,7 @@ export async function POST(req: NextRequest) {
     }
 
     // 4. Perform blockchain checks
-    const { contractAddress, network, ruleType, minQuantity, traitType, traitValue, roleId } = rule;
+    const { contractAddress, network, ruleType, minQuantity, maxQuantity, traitType, traitValue, roleId } = rule;
     let isEligible = false;
     let detailsMessage = '';
 
@@ -324,9 +325,12 @@ export async function POST(req: NextRequest) {
         8000,
         'NFT balance check timed out.'
       );
-      const threshold = minQuantity || 1;
-      isEligible = balance >= threshold;
-      detailsMessage = `NFT balance checked: Found ${balance}. Required: ${threshold}+`;
+      const minThreshold = minQuantity || 1;
+      const maxThreshold = maxQuantity ? Number(maxQuantity) : null;
+      isEligible = balance >= minThreshold && (maxThreshold === null || balance <= maxThreshold);
+      detailsMessage = maxThreshold
+        ? `NFT balance checked: Found ${balance}. Required range: ${minThreshold} - ${maxThreshold}`
+        : `NFT balance checked: Found ${balance}. Required: ${minThreshold}+`;
     } else if (ruleType === 'trait') {
       // 1. Try OpenSea first
       const hasOpenSeaKey = !!process.env.OPENSEA_API_KEY;
@@ -485,7 +489,7 @@ export async function PUT(req: NextRequest) {
   const session = getSession(req);
 
   try {
-    const { guildId, contractAddress, roleId, network, ruleType, minQuantity, traitType, traitValue } =
+    const { guildId, contractAddress, roleId, network, ruleType, minQuantity, maxQuantity, traitType, traitValue } =
       await req.json();
 
     if (!guildId || !contractAddress || !roleId || !network || !ruleType) {
@@ -510,6 +514,12 @@ export async function PUT(req: NextRequest) {
 
     if (ruleType === 'quantity') {
       newRule.minQuantity = Math.max(1, Number(minQuantity) || 1);
+      if (maxQuantity !== undefined && maxQuantity !== null && maxQuantity !== '') {
+        const parsedMax = Number(maxQuantity);
+        if (!isNaN(parsedMax) && parsedMax >= newRule.minQuantity) {
+          newRule.maxQuantity = parsedMax;
+        }
+      }
     } else if (ruleType === 'trait') {
       if (!traitType || !traitValue) {
         return NextResponse.json({ error: 'Trait type and value are required for trait rules' }, { status: 400 });

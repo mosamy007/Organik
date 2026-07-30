@@ -25,6 +25,7 @@ export default function NftRulesPage({ params }: PageProps) {
   const [network, setNetwork] = useState('ethereum');
   const [ruleType, setRuleType] = useState<'quantity' | 'trait'>('quantity');
   const [minQuantity, setMinQuantity] = useState('1');
+  const [maxQuantity, setMaxQuantity] = useState('');
   const [traitType, setTraitType] = useState('');
   const [traitValue, setTraitValue] = useState('');
 
@@ -200,6 +201,7 @@ export default function NftRulesPage({ params }: PageProps) {
         network,
         ruleType,
         minQuantity: ruleType === 'quantity' ? Number(minQuantity) : undefined,
+        maxQuantity: ruleType === 'quantity' && maxQuantity !== '' ? Number(maxQuantity) : undefined,
         traitType: ruleType === 'trait' ? traitType : undefined,
         traitValue: ruleType === 'trait' ? traitValue : undefined,
       };
@@ -218,6 +220,7 @@ export default function NftRulesPage({ params }: PageProps) {
         // Reset form
         setContractAddress('');
         setMinQuantity('1');
+        setMaxQuantity('');
         setTraitType('');
         setTraitValue('');
         setFetchedTraits({});
@@ -431,16 +434,32 @@ export default function NftRulesPage({ params }: PageProps) {
             </div>
 
             {ruleType === 'quantity' && (
-              <div className="form-group animate-fade-in">
-                <label className="form-label">Minimum Quantity Held</label>
-                <input
-                  type="number"
-                  className="form-input"
-                  min="1"
-                  value={minQuantity}
-                  onChange={(e) => setMinQuantity(e.target.value)}
-                  required
-                />
+              <div className="form-row-inline animate-fade-in">
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">Min Quantity</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    min="1"
+                    value={minQuantity}
+                    onChange={(e) => setMinQuantity(e.target.value)}
+                    placeholder="e.g. 1"
+                    required
+                  />
+                </div>
+                <div className="form-group" style={{ flex: 1 }}>
+                  <label className="form-label">
+                    Max Quantity <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Optional)</span>
+                  </label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    min={minQuantity || "1"}
+                    value={maxQuantity}
+                    onChange={(e) => setMaxQuantity(e.target.value)}
+                    placeholder="e.g. 10 (Leave empty for unlimited)"
+                  />
+                </div>
               </div>
             )}
 
@@ -608,7 +627,15 @@ export default function NftRulesPage({ params }: PageProps) {
                         </div>
                         <div style={styles.ruleSummaryText}>
                           {rule.ruleType === 'quantity' ? (
-                            <span>Condition: Holds <strong>&gt;= {rule.minQuantity}</strong> NFT(s)</span>
+                            <span>
+                              Condition: Holds{' '}
+                              <strong>
+                                {rule.maxQuantity
+                                  ? `${rule.minQuantity} – ${rule.maxQuantity}`
+                                  : `>= ${rule.minQuantity}`}
+                              </strong>{' '}
+                              NFT(s)
+                            </span>
                           ) : (
                             <span>Condition: NFT Trait <strong>{rule.traitType} = {rule.traitValue}</strong></span>
                           )}
