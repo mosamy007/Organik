@@ -70,20 +70,48 @@ async function getTwitterUserId(screenName: string, authToken: string, ct0: stri
   return data?.data?.user?.result?.rest_id || null;
 }
 
-async function getFollowingHandles(userId: string, authToken: string, ct0: string): Promise<string[]> {
-  const variables = { userId, count: 200, includePromotedContent: false };
-  const url = `https://x.com/i/api/graphql/2vUj-_Ek-UmBVDNtd8OnQA/Following?variables=${encodeURIComponent(JSON.stringify(variables))}&features=${encodeURIComponent(JSON.stringify(FOLLOWING_FEATURES))}`;
+async function getFollowingHandles(userId: string, authToken: string, ct0: string, targetHandle: string): Promise<boolean> {
+  let cursor: string | null = null;
+  let page = 1;
 
-  const res = await fetch(url, { headers: makeTwitterHeaders(authToken, ct0) });
-  if (!res.ok) return [];
+  while (page <= 15) {
+    const variables: any = { userId, count: 200, includePromotedContent: false };
+    if (cursor) variables.cursor = cursor;
 
-  const data = await res.json();
-  const instructions: any[] = data?.data?.user?.result?.timeline?.timeline?.instructions || [];
-  const entries = instructions.flatMap((i: any) => i.entries || []);
+    const url = `https://x.com/i/api/graphql/2vUj-_Ek-UmBVDNtd8OnQA/Following?variables=${encodeURIComponent(JSON.stringify(variables))}&features=${encodeURIComponent(JSON.stringify(FOLLOWING_FEATURES))}`;
 
-  return entries
-    .map((e: any) => e?.content?.itemContent?.user_results?.result?.legacy?.screen_name?.toLowerCase())
-    .filter(Boolean);
+    try {
+      const res = await fetch(url, { headers: makeTwitterHeaders(authToken, ct0) });
+      if (!res.ok) break;
+
+      const data = await res.json();
+      const userResult = data?.data?.user?.result;
+      const instructions: any[] =
+        userResult?.timeline?.timeline?.instructions ||
+        userResult?.timeline_v2?.timeline?.instructions ||
+        [];
+      const entries = instructions.flatMap((i: any) => i.entries || []);
+
+      const handles = entries
+        .map((e: any) => e?.content?.itemContent?.user_results?.result?.legacy?.screen_name?.toLowerCase())
+        .filter(Boolean);
+
+      if (handles.includes(targetHandle)) {
+        return true;
+      }
+
+      const cursorEntry = entries.find((e: any) => e.entryId?.startsWith('cursor-bottom'));
+      cursor = cursorEntry?.content?.value || cursorEntry?.content?.operation?.cursor?.value || null;
+
+      if (!cursor) break;
+      page++;
+    } catch (err) {
+      console.error(`[X Verify GQL] Error fetching page ${page}:`, err);
+      break;
+    }
+  }
+
+  return false;
 }
 
 export async function POST(req: NextRequest) {
@@ -117,7 +145,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid user handle or target URL.' }, { status: 400 });
     }
 
-    // Step 1: Attempt multi-strategy Twikit verification via Python script
+    // Step 1: Attempt multi-strategy Twikit verification via Python script (if local environment has python)
     try {
       const scriptPath = path.join(process.cwd(), 'bot', 'verify_follow.py');
       const { stdout } = await execFileAsync('python', [scriptPath, cleanUserHandle, targetHandle], {
@@ -125,16 +153,14 @@ export async function POST(req: NextRequest) {
         env: { ...process.env, TWITTER_AUTH_TOKEN: authToken, TWITTER_CT0: ct0 },
       });
       const pythonRes = JSON.parse(stdout.trim());
-      if (pythonRes.success) {
-        if (pythonRes.following) {
-          return NextResponse.json({ success: true, verified: true });
-        }
+      if (pythonRes.success && pythonRes.following) {
+        return NextResponse.json({ success: true, verified: true });
       }
     } catch (pyErr) {
-      console.warn('[X Verify] Python script verification fallback to GraphQL:', pyErr);
+      // Python unavailable (e.g. Vercel Serverless environment), proceed to GraphQL multi-page check
     }
 
-    // Step 2: Fallback to direct GraphQL user following inspection
+    // Step 2: Direct GraphQL user lookup & multi-page cursor search
     const userId = await getTwitterUserId(cleanUserHandle, authToken, ct0);
     if (!userId) {
       return NextResponse.json({
@@ -143,8 +169,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const followingHandles = await getFollowingHandles(userId, authToken, ct0);
-    const isFollowing = followingHandles.includes(targetHandle);
+    const isFollowing = await getFollowingHandles(userId, authToken, ct0, targetHandle);
 
     if (isFollowing) {
       return NextResponse.json({ success: true, verified: true });
