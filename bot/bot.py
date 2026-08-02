@@ -1034,12 +1034,20 @@ async def on_interaction(interaction: discord.Interaction):
 
     # 1. Handle Ticket Creation Panel buttons ("ticket_open", "ticket_idea_open", "ticket_collab_open")
     if custom_id in ["ticket_open", "ticket_idea_open", "ticket_collab_open"]:
-        await interaction.response.defer(ephemeral=True)
+        try:
+            await interaction.response.defer(ephemeral=True)
+        except (discord.errors.NotFound, discord.errors.HTTPException) as defer_err:
+            print(f"[Tickets] Interaction expired or unknown (10062): {defer_err}")
+            return
+
         guild = interaction.guild
         user = interaction.user
 
         if not guild or not user:
-            await interaction.followup.send("❌ Error: Ticket system must be used inside a server.", ephemeral=True)
+            try:
+                await interaction.followup.send("❌ Error: Ticket system must be used inside a server.", ephemeral=True)
+            except Exception:
+                pass
             return
 
         is_idea = (custom_id == "ticket_idea_open")
@@ -1066,10 +1074,13 @@ async def on_interaction(interaction: discord.Interaction):
         # Check if user already has an active ticket channel in this guild
         existing_channel = discord.utils.get(guild.text_channels, name=channel_name)
         if existing_channel:
-            await interaction.followup.send(
-                f"⚠️ You already have an open {ticket_label}: {existing_channel.mention}",
-                ephemeral=True
-            )
+            try:
+                await interaction.followup.send(
+                    f"⚠️ You already have an open {ticket_label}: {existing_channel.mention}",
+                    ephemeral=True
+                )
+            except Exception:
+                pass
             return
 
         # Fetch tickets config from MongoDB
@@ -1143,14 +1154,23 @@ async def on_interaction(interaction: discord.Interaction):
             staff_mentions = " ".join([f"<@&{rid}>" for rid in staff_role_ids]) if staff_role_ids else ""
             await new_channel.send(content=f"{user.mention} {staff_mentions}".strip(), embed=embed, view=view)
 
-            await interaction.followup.send(f"✅ Your {ticket_label} has been created: {new_channel.mention}", ephemeral=True)
+            try:
+                await interaction.followup.send(f"✅ Your {ticket_label} has been created: {new_channel.mention}", ephemeral=True)
+            except Exception:
+                pass
         except Exception as create_err:
             print(f"[Tickets] Error creating ticket channel: {create_err}")
-            await interaction.followup.send(f"❌ Failed to create ticket channel: {create_err}", ephemeral=True)
+            try:
+                await interaction.followup.send(f"❌ Failed to create ticket channel: {create_err}", ephemeral=True)
+            except Exception:
+                pass
 
     # 2. Handle Claim Ticket button ("ticket_claim")
     elif custom_id == "ticket_claim":
-        await interaction.response.defer()
+        try:
+            await interaction.response.defer()
+        except (discord.errors.NotFound, discord.errors.HTTPException):
+            pass
         user = interaction.user
         channel = interaction.channel
         if isinstance(channel, discord.TextChannel) and (channel.name.startswith("ticket-") or "idea" in channel.name or "collab" in channel.name or "💡" in channel.name or "🤝" in channel.name):
@@ -1162,7 +1182,10 @@ async def on_interaction(interaction: discord.Interaction):
 
     # 3. Handle Close Ticket button ("ticket_close")
     elif custom_id == "ticket_close":
-        await interaction.response.defer()
+        try:
+            await interaction.response.defer()
+        except (discord.errors.NotFound, discord.errors.HTTPException):
+            pass
         channel = interaction.channel
         if isinstance(channel, discord.TextChannel) and (channel.name.startswith("ticket-") or "idea" in channel.name or "collab" in channel.name or "💡" in channel.name or "🤝" in channel.name):
             embed = discord.Embed(
