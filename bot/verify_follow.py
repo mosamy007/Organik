@@ -28,10 +28,86 @@ async def check_follow(user_handle: str, target_handle: str):
 
     try:
         user = await client.get_user_by_screen_name(user_clean)
-        following = await user.get_following()
-        following_handles = [x.screen_name.lower() for x in following]
-        
-        is_following = target_clean in following_handles
+        target = await client.get_user_by_screen_name(target_clean)
+
+        is_verified_user = getattr(user, 'is_blue_verified', False) or getattr(user, 'verified', False)
+        is_following = False
+
+        # Strategy 1: Search User's Following List (paginated up to 5 pages / 1000 items)
+        try:
+            following = await user.get_following(count=200)
+            curr = following
+            pages = 0
+            while curr and pages < 5:
+                handles = {x.screen_name.lower() for x in curr}
+                if target_clean in handles:
+                    is_following = True
+                    break
+                pages += 1
+                if hasattr(curr, 'next'):
+                    try:
+                        curr = await curr.next()
+                    except Exception:
+                        break
+                else:
+                    break
+        except Exception as e1:
+            print(f"[CheckFollow Strategy 1 Error]: {e1}")
+
+        # Strategy 2: Search Target's Verified Followers List (for verified X users)
+        if not is_following and is_verified_user:
+            try:
+                v_followers = await target.get_verified_followers(count=200)
+                curr = v_followers
+                pages = 0
+                while curr and pages < 5:
+                    v_handles = {x.screen_name.lower() for x in curr}
+                    if user_clean in v_handles:
+                        is_following = True
+                        break
+                    pages += 1
+                    if hasattr(curr, 'next'):
+                        try:
+                            curr = await curr.next()
+                        except Exception:
+                            break
+                    else:
+                        break
+            except Exception as e2:
+                print(f"[CheckFollow Strategy 2 Error]: {e2}")
+
+        # Strategy 3: Search Target's Standard Followers List (paginated up to 5 pages / 1000 items)
+        if not is_following:
+            try:
+                followers = await target.get_followers(count=200)
+                curr = followers
+                pages = 0
+                while curr and pages < 5:
+                    f_handles = {x.screen_name.lower() for x in curr}
+                    if user_clean in f_handles:
+                        is_following = True
+                        break
+                    pages += 1
+                    if hasattr(curr, 'next'):
+                        try:
+                            curr = await curr.next()
+                        except Exception:
+                            break
+                    else:
+                        break
+            except Exception as e3:
+                print(f"[CheckFollow Strategy 3 Error]: {e3}")
+
+        # Strategy 4: Target's Followers You Know
+        if not is_following:
+            try:
+                k_followers = await target.get_followers_you_know(count=200)
+                k_handles = {x.screen_name.lower() for x in k_followers}
+                if user_clean in k_handles:
+                    is_following = True
+            except Exception as e4:
+                print(f"[CheckFollow Strategy 4 Error]: {e4}")
+
         return {
             "success": True,
             "following": is_following,

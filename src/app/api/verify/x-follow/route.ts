@@ -1,4 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { execFile } from 'child_process';
+import path from 'path';
+import { promisify } from 'util';
+
+const execFileAsync = promisify(execFile);
 
 const BEARER = 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA';
 
@@ -112,7 +117,24 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid user handle or target URL.' }, { status: 400 });
     }
 
-    // Step 1: Get the user's Twitter ID
+    // Step 1: Attempt multi-strategy Twikit verification via Python script
+    try {
+      const scriptPath = path.join(process.cwd(), 'bot', 'verify_follow.py');
+      const { stdout } = await execFileAsync('python', [scriptPath, cleanUserHandle, targetHandle], {
+        timeout: 15000,
+        env: { ...process.env, TWITTER_AUTH_TOKEN: authToken, TWITTER_CT0: ct0 },
+      });
+      const pythonRes = JSON.parse(stdout.trim());
+      if (pythonRes.success) {
+        if (pythonRes.following) {
+          return NextResponse.json({ success: true, verified: true });
+        }
+      }
+    } catch (pyErr) {
+      console.warn('[X Verify] Python script verification fallback to GraphQL:', pyErr);
+    }
+
+    // Step 2: Fallback to direct GraphQL user following inspection
     const userId = await getTwitterUserId(cleanUserHandle, authToken, ct0);
     if (!userId) {
       return NextResponse.json({
@@ -121,9 +143,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Step 2: Get their following list
     const followingHandles = await getFollowingHandles(userId, authToken, ct0);
-
     const isFollowing = followingHandles.includes(targetHandle);
 
     if (isFollowing) {
