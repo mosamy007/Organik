@@ -74,6 +74,40 @@ export default function SendMessagePage({ params }: PageProps) {
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [statusMessage, setStatusMessage] = useState('');
 
+  // Mention Helper States
+  const [roles, setRoles] = useState<any[]>([]);
+  const [selectedRoleToMention, setSelectedRoleToMention] = useState('');
+  const [customUserIdToMention, setCustomUserIdToMention] = useState('');
+
+  useEffect(() => {
+    const fetchRoles = async () => {
+      try {
+        const res = await fetch(`/api/roles?guildId=${guildId}`);
+        if (res.ok) {
+          const data = await res.json();
+          setRoles(data.roles || []);
+        }
+      } catch (err) {
+        console.error('Error fetching server roles:', err);
+      }
+    };
+    fetchRoles();
+  }, [guildId]);
+
+  const insertRoleMention = (roleId: string) => {
+    if (!roleId) return;
+    const tag = roleId === 'everyone' ? '@everyone' : roleId === 'here' ? '@here' : `<@&${roleId}>`;
+    setTextContent((prev) => (prev ? `${prev} ${tag}` : tag));
+  };
+
+  const insertUserMention = (userId: string) => {
+    const cleanId = userId.trim().replace(/[^0-9]/g, '');
+    if (!cleanId) return;
+    const tag = `<@${cleanId}>`;
+    setTextContent((prev) => (prev ? `${prev} ${tag}` : tag));
+    setCustomUserIdToMention('');
+  };
+
   // Load guild channels
   useEffect(() => {
     const fetchChannels = async () => {
@@ -390,6 +424,67 @@ export default function SendMessagePage({ params }: PageProps) {
             >
               Styled Embed
             </button>
+          </div>
+
+          {/* Mention Users & Roles Helper Card */}
+          <div className="glass-card" style={{ padding: '14px 16px', marginBottom: '16px', borderRadius: '12px', background: 'rgba(255,255,255,0.03)', border: '1px solid rgba(255,255,255,0.08)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px', flexWrap: 'wrap', gap: '8px' }}>
+              <strong style={{ fontSize: '0.85rem', color: 'var(--primary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                🏷️ Mention Users & Roles Helper
+              </strong>
+              <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                Tip: Place mentions in Message Content (outside embed) to trigger Discord ping sounds
+              </span>
+            </div>
+
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center' }}>
+              {/* Role Selector */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <select
+                  className="form-input"
+                  style={{ fontSize: '0.8rem', padding: '6px 10px', width: 'auto' }}
+                  value={selectedRoleToMention}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedRoleToMention(val);
+                    if (val) {
+                      insertRoleMention(val);
+                      setSelectedRoleToMention('');
+                    }
+                  }}
+                >
+                  <option value="">➕ Insert Role Mention...</option>
+                  <option value="everyone">@everyone</option>
+                  <option value="here">@here</option>
+                  {roles.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      @{r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* User ID Input */}
+              <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+                <input
+                  type="text"
+                  className="form-input"
+                  style={{ fontSize: '0.8rem', padding: '6px 10px', width: '190px' }}
+                  placeholder="Paste User Discord ID..."
+                  value={customUserIdToMention}
+                  onChange={(e) => setCustomUserIdToMention(e.target.value)}
+                />
+                <button
+                  type="button"
+                  onClick={() => insertUserMention(customUserIdToMention)}
+                  disabled={!customUserIdToMention.trim()}
+                  className="btn btn-secondary"
+                  style={{ fontSize: '0.75rem', padding: '6px 12px' }}
+                >
+                  + Mention User
+                </button>
+              </div>
+            </div>
           </div>
 
           {/* Text Editor */}
