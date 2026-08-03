@@ -736,7 +736,7 @@ async def gloombles_polling_loop():
             embed.add_field(name="🟡 Legendaries", value=f"`{legendaries}`", inline=True)
 
             embed.set_footer(text="Live Auto-Update • Refreshed every 5 mins • gloombles.com")
-            embed.timestamp = datetime.datetime.now(datetime.timezone.utc)
+            embed.timestamp = datetime.now(timezone.utc)
 
             channel = bot.get_channel(int(channel_id))
             if not channel:
@@ -756,7 +756,7 @@ async def gloombles_polling_loop():
             sent_msg = await channel.send(embed=embed)
             db["gloombles_tracker"].update_one(
                 {"guildId": guild_id},
-                {"$set": {"messageId": str(sent_msg.id), "lastUpdated": datetime.datetime.now(datetime.timezone.utc)}}
+                {"$set": {"messageId": str(sent_msg.id), "lastUpdated": datetime.now(timezone.utc)}}
             )
 
     except Exception as e:
