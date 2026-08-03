@@ -46,7 +46,9 @@ export async function GET(req: NextRequest) {
         }
       }
 
-      const totalEntries = await db.collection('giveaway_entries').countDocuments({ giveawayId });
+      const totalEntries = await db.collection('giveaway_entries').countDocuments({
+        $or: [{ giveawayId: String(giveawayId) }, { giveawayId: giveaway._id }],
+      });
 
       // Enrich winners with detailed objects safely
       if (giveaway.winners && giveaway.winners.length > 0) {
@@ -86,18 +88,26 @@ export async function GET(req: NextRequest) {
 
     // Enrich winners for all giveaways in the list safely
     for (const gw of giveaways) {
+      const entriesCount = await db.collection('giveaway_entries').countDocuments({
+        $or: [{ giveawayId: String(gw._id) }, { giveawayId: gw._id }],
+      });
+      gw.entriesCount = entriesCount;
+
       if (gw.winners && gw.winners.length > 0) {
-        const winnerEntries = await db.collection('giveaway_entries').find({
-          giveawayId: String(gw._id)
-        }).toArray();
-        const entriesMap = new Map(winnerEntries.map(e => [e.discordId, e]));
+        const winnerEntries = await db
+          .collection('giveaway_entries')
+          .find({
+            $or: [{ giveawayId: String(gw._id) }, { giveawayId: gw._id }],
+          })
+          .toArray();
+        const entriesMap = new Map(winnerEntries.map((e) => [e.discordId, e]));
         gw.winners = gw.winners.map((w: any) => {
-          const discordId = typeof w === 'object' && w !== null ? (w.discordId || String(w)) : String(w);
+          const discordId = typeof w === 'object' && w !== null ? w.discordId || String(w) : String(w);
           const entry = entriesMap.get(discordId);
           return {
             discordId,
             username: entry?.discordUsername || (typeof w === 'object' && w?.username ? w.username : discordId),
-            walletAddress: entry?.walletAddress || (typeof w === 'object' && w?.walletAddress ? w.walletAddress : '')
+            walletAddress: entry?.walletAddress || (typeof w === 'object' && w?.walletAddress ? w.walletAddress : ''),
           };
         });
       }
@@ -430,8 +440,13 @@ export async function PATCH(req: NextRequest) {
       return NextResponse.json({ error: 'Giveaway has already been drawn' }, { status: 400 });
     }
 
-    // 2. Fetch all entries
-    const entries = await db.collection('giveaway_entries').find({ giveawayId }).toArray();
+    // 2. Fetch all entries (matching string ID or ObjectId)
+    const entries = await db
+      .collection('giveaway_entries')
+      .find({
+        $or: [{ giveawayId: String(giveawayId) }, { giveawayId: giveaway._id }],
+      })
+      .toArray();
     if (entries.length === 0) {
       // End giveaway with no winners
       await db

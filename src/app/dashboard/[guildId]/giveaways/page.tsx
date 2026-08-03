@@ -690,17 +690,29 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
           ) : giveaways.length > 0 ? (
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
               {giveaways.map((gw) => {
-                const isEnded = gw.status === 'ended' || new Date() > new Date(gw.endTime);
+                const isDrawn = gw.status === 'ended';
+                const isTimeExpired = new Date() > new Date(gw.endTime);
 
                 return (
                   <div key={gw._id} className="glass-card" style={styles.giveawayCard}>
                     <div style={styles.cardHeader}>
-                      <span style={isEnded ? styles.statusBadgeEnded : styles.statusBadgeActive}>
-                        {isEnded ? 'Ended' : 'Active'}
-                      </span>
-                      <span style={styles.metaBadge}>
-                        <Users size={12} /> {gw.winnerCount} Winner(s)
-                      </span>
+                      {isDrawn ? (
+                        <span style={{ ...styles.statusBadgeEnded }}>Ended & Drawn</span>
+                      ) : isTimeExpired ? (
+                        <span style={{ ...styles.statusBadgeActive, background: 'rgba(234,179,8,0.15)', color: '#facc15', borderColor: 'rgba(234,179,8,0.3)' }}>
+                          ⏳ Time Expired — Ready to Draw
+                        </span>
+                      ) : (
+                        <span style={{ ...styles.statusBadgeActive }}>Active</span>
+                      )}
+                      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+                        <span style={{ ...styles.metaBadge, color: '#10b981', borderColor: 'rgba(16,185,129,0.3)' }}>
+                          👥 {gw.entriesCount !== undefined ? gw.entriesCount : (gw.winners ? gw.winners.length : 0)} Entered
+                        </span>
+                        <span style={styles.metaBadge}>
+                          <Users size={12} /> {gw.winnerCount} Winner(s)
+                        </span>
+                      </div>
                     </div>
 
                     <h4 style={styles.cardPrize}>{gw.prize}</h4>
@@ -710,7 +722,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
                       <div style={styles.infoCol}>
                         <Clock size={14} color="var(--text-muted)" />
                         <span style={{ fontSize: '0.85rem' }}>
-                          {isEnded ? 'Ended' : formatTimeRemaining(gw.endTime) + ' remaining'}
+                          {isDrawn ? 'Ended' : isTimeExpired ? 'Expired — Pending Draw' : formatTimeRemaining(gw.endTime) + ' remaining'}
                         </span>
                       </div>
                       <div style={styles.infoCol}>
@@ -726,14 +738,20 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
                     </div>
 
                     <div style={{ display: 'flex', gap: '10px', marginTop: '12px' }}>
-                      {!isEnded && (
+                      {!isDrawn && (
                         <>
                           <button
                             onClick={() => handleDrawWinners(gw._id)}
                             className="btn btn-secondary"
-                            style={{ flex: 2, color: '#34d399', borderColor: 'rgba(16,185,129,0.2)' }}
+                            style={{
+                              flex: 2,
+                              color: isTimeExpired ? '#10b981' : '#34d399',
+                              borderColor: isTimeExpired ? '#10b981' : 'rgba(16,185,129,0.2)',
+                              background: isTimeExpired ? 'rgba(16,185,129,0.15)' : undefined,
+                              fontWeight: isTimeExpired ? 'bold' : 'normal'
+                            }}
                           >
-                            End & Draw
+                            🎉 {isTimeExpired ? `Draw Winner(s) Now (${gw.entriesCount || 0} Entered)` : 'End & Draw'}
                           </button>
                           <button
                             onClick={() => handleEditClick(gw)}
@@ -753,7 +771,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
                       </button>
                     </div>
 
-                    {isEnded && (
+                    {isDrawn && (
                       <div style={{ ...styles.drawnWinnersBox, marginTop: '12px' }}>
                         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                           <strong style={{ fontSize: '0.85rem', color: '#fbbf24' }}>🏆 Winners drawn:</strong>
