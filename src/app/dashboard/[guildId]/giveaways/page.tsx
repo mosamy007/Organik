@@ -115,12 +115,14 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
     loadChannels();
   }, [guildId]);
 
-  const handleAddTask = (type: 'wallet_input' | 'custom_link') => {
+  const handleAddTask = (type: 'wallet_input' | 'custom_link' | 'custom_text') => {
     const id = `t-${Date.now()}`;
     if (type === 'wallet_input') {
       setTasks((prev) => [...prev, { id, type, label: 'Submit EVM Wallet Address', required: true }]);
-    } else {
+    } else if (type === 'custom_link') {
       setTasks((prev) => [...prev, { id, type, label: 'Follow our official X Account', url: 'https://x.com/', required: true }]);
+    } else if (type === 'custom_text') {
+      setTasks((prev) => [...prev, { id, type, label: 'Enter custom response / answer', placeholder: 'Type answer here...', required: true }]);
     }
   };
 
@@ -286,12 +288,16 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
       return;
     }
 
-    const headers = ['Username', 'Discord ID', 'Wallet Address'];
+    const customTextTasks = (gw.tasks || []).filter((t: any) => t.type === 'custom_text');
+    const headers = ['Username', 'Discord ID', 'Wallet Address', ...customTextTasks.map((t: any) => t.label || 'Custom Text Response')];
+
     const rows = gw.winners.map((w: any) => {
       const username = typeof w === 'object' ? w.username : '';
       const discordId = typeof w === 'object' ? w.discordId : w;
       const walletAddress = typeof w === 'object' ? w.walletAddress : '';
-      return [username, discordId, walletAddress].map(val => `"${String(val || '').replace(/"/g, '""')}"`).join(',');
+      const customAnswers = typeof w === 'object' && w.customTextAnswers ? w.customTextAnswers : {};
+      const customVals = customTextTasks.map((t: any) => customAnswers[t.id] || '');
+      return [username, discordId, walletAddress, ...customVals].map(val => `"${String(val || '').replace(/"/g, '""')}"`).join(',');
     });
 
     const csvContent = [headers.join(','), ...rows].join('\n');
@@ -594,6 +600,9 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
                 <button type="button" onClick={() => handleAddTask('custom_link')} style={styles.taskBtn}>
                   + Link / Social
                 </button>
+                <button type="button" onClick={() => handleAddTask('custom_text')} style={styles.taskBtn}>
+                  + Custom Text Task
+                </button>
               </div>
             </div>
 
@@ -601,7 +610,9 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
               {tasks.map((task, idx) => (
                 <div key={task.id} style={styles.taskBuilderItem}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={styles.taskTypeBadge}>{task.type === 'wallet_input' ? 'Wallet Sub' : 'Link Task'}</span>
+                    <span style={styles.taskTypeBadge}>
+                      {task.type === 'wallet_input' ? 'Wallet Sub' : task.type === 'custom_text' ? 'Custom Text' : 'Link Task'}
+                    </span>
                     <button type="button" onClick={() => handleRemoveTask(task.id)} style={styles.removeTaskBtn}>
                       Remove
                     </button>
@@ -613,7 +624,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
                       className="form-input"
                       value={task.label}
                       onChange={(e) => handleUpdateTask(task.id, { label: e.target.value })}
-                      placeholder="Task Action Text (e.g. Follow us on Twitter)"
+                      placeholder="Task Action Label (e.g. Enter Telegram Username or Answer question)"
                       required
                     />
                   </div>
@@ -630,6 +641,27 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
                       />
                     </div>
                   )}
+
+                  {task.type === 'custom_text' && (
+                    <div className="form-group" style={{ margin: '8px 0' }}>
+                      <input
+                        type="text"
+                        className="form-input"
+                        value={task.placeholder || ''}
+                        onChange={(e) => handleUpdateTask(task.id, { placeholder: e.target.value })}
+                        placeholder="Input Placeholder text (e.g. @username or Type answer here...)"
+                      />
+                    </div>
+                  )}
+
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '0.8rem', color: 'var(--text-muted)', marginTop: '6px', cursor: 'pointer' }}>
+                    <input
+                      type="checkbox"
+                      checked={task.required !== false}
+                      onChange={(e) => handleUpdateTask(task.id, { required: e.target.checked })}
+                    />
+                    <span>Required Task (User must complete to enter)</span>
+                  </label>
                 </div>
               ))}
             </div>

@@ -53,7 +53,7 @@ export async function GET(req: NextRequest) {
       // Enrich winners with detailed objects safely
       if (giveaway.winners && giveaway.winners.length > 0) {
         const winnerEntries = await db.collection('giveaway_entries').find({
-          giveawayId: String(giveaway._id)
+          $or: [{ giveawayId: String(giveaway._id) }, { giveawayId: giveaway._id }],
         }).toArray();
         const entriesMap = new Map(winnerEntries.map(e => [e.discordId, e]));
         giveaway.winners = giveaway.winners.map((w: any) => {
@@ -62,7 +62,8 @@ export async function GET(req: NextRequest) {
           return {
             discordId,
             username: entry?.discordUsername || (typeof w === 'object' && w?.username ? w.username : discordId),
-            walletAddress: entry?.walletAddress || (typeof w === 'object' && w?.walletAddress ? w.walletAddress : '')
+            walletAddress: entry?.walletAddress || (typeof w === 'object' && w?.walletAddress ? w.walletAddress : ''),
+            customTextAnswers: entry?.customTextAnswers || (typeof w === 'object' && w?.customTextAnswers ? w.customTextAnswers : {})
           };
         });
       }
@@ -108,6 +109,7 @@ export async function GET(req: NextRequest) {
             discordId,
             username: entry?.discordUsername || (typeof w === 'object' && w?.username ? w.username : discordId),
             walletAddress: entry?.walletAddress || (typeof w === 'object' && w?.walletAddress ? w.walletAddress : ''),
+            customTextAnswers: entry?.customTextAnswers || (typeof w === 'object' && w?.customTextAnswers ? w.customTextAnswers : {})
           };
         });
       }
@@ -250,7 +252,7 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
-    const { giveawayId, walletAddress, tasksCompleted } = await req.json();
+    const { giveawayId, walletAddress, customTextAnswers, tasksCompleted } = await req.json();
 
     if (!giveawayId) {
       return NextResponse.json({ error: 'Missing giveawayId' }, { status: 400 });
@@ -309,6 +311,13 @@ export async function PUT(req: NextRequest) {
         }
       }
 
+      if (task.type === 'custom_text') {
+        const textVal = (customTextAnswers?.[task.id] || '').trim();
+        if (task.required !== false && !textVal) {
+          return NextResponse.json({ error: `Please complete the required text field: ${task.label}` }, { status: 400 });
+        }
+      }
+
       if (task.required && !isCompleted) {
         return NextResponse.json({ error: `Please complete the required task: ${task.label}` }, { status: 400 });
       }
@@ -325,6 +334,7 @@ export async function PUT(req: NextRequest) {
           discordId: session.discordId,
           discordUsername: session.username,
           walletAddress: walletAddress || null,
+          customTextAnswers: customTextAnswers || {},
           tasksCompleted: completedTasksMap,
           joinedAt: new Date(),
         },

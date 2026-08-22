@@ -29,6 +29,7 @@ function GiveawaysContent() {
   // Tasks completion state
   const [tasksCompleted, setTasksCompleted] = useState<Record<string, boolean>>({});
   const [localWalletInput, setLocalWalletInput] = useState<string>('');
+  const [customTextInputs, setCustomTextInputs] = useState<Record<string, string>>({});
   const [submitStatus, setSubmitStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [submitMessage, setSubmitMessage] = useState<string>('');
 
@@ -111,6 +112,9 @@ function GiveawaysContent() {
           if (data.userEntryDetails?.walletAddress) {
             setLocalWalletInput(data.userEntryDetails.walletAddress);
           }
+          if (data.userEntryDetails?.customTextAnswers) {
+            setCustomTextInputs(data.userEntryDetails.customTextAnswers);
+          }
         }
       } catch (err) {
         console.error('Failed to load giveaway details:', err);
@@ -176,6 +180,17 @@ function GiveawaysContent() {
       }
     }
 
+    // Validate required custom text tasks
+    const customTextTasks = giveaway.tasks?.filter((t: any) => t.type === 'custom_text') || [];
+    for (const ctTask of customTextTasks) {
+      const userVal = (customTextInputs[ctTask.id] || '').trim();
+      if (ctTask.required !== false && !userVal) {
+        setSubmitStatus('error');
+        setSubmitMessage(`Please fill in the required field: "${ctTask.label || 'Custom Text'}"`);
+        return;
+      }
+    }
+
     try {
       const res = await fetch('/api/giveaways', {
         method: 'PUT',
@@ -183,6 +198,7 @@ function GiveawaysContent() {
         body: JSON.stringify({
           giveawayId,
           walletAddress: hasWalletTask ? localWalletInput : undefined,
+          customTextAnswers: customTextInputs,
           tasksCompleted,
         }),
       });
@@ -371,6 +387,38 @@ function GiveawaysContent() {
                             onChange={(e) => {
                               setLocalWalletInput(e.target.value);
                               handleTaskComplete(task.id, /^0x[a-fA-F0-9]{40}$/.test(e.target.value));
+                            }}
+                            disabled={hasEntered}
+                            style={styles.taskInput}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                }
+
+                if (task.type === 'custom_text') {
+                  const currentVal = customTextInputs[task.id] || '';
+                  const isTaskDone = currentVal.trim().length > 0;
+
+                  return (
+                    <div
+                      key={task.id}
+                      style={isTaskDone ? styles.taskItemSuccess : styles.taskItemPending}
+                    >
+                      <div style={{ ...styles.taskDetails, width: '100%' }}>
+                        <span style={isTaskDone ? styles.taskLabelSuccess : styles.taskLabel}>
+                          {isTaskDone ? '✓ ' : ''}{task.label || 'Custom Answer Input'} {task.required !== false && '*'}
+                        </span>
+                        <div style={{ marginTop: '10px', display: 'flex', gap: '8px', width: '100%' }}>
+                          <input
+                            type="text"
+                            placeholder={task.placeholder || 'Enter response here...'}
+                            value={currentVal}
+                            onChange={(e) => {
+                              const val = e.target.value;
+                              setCustomTextInputs((prev) => ({ ...prev, [task.id]: val }));
+                              handleTaskComplete(task.id, task.required !== false ? val.trim().length > 0 : true);
                             }}
                             disabled={hasEntered}
                             style={styles.taskInput}
