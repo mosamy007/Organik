@@ -14,12 +14,13 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   if (targetId) {
     try {
       const db = await getDb();
-      const gw = await db.collection('giveaways').findOne({
+      const filter: any = {
         $or: [
-          { _id: ObjectId.isValid(targetId) ? new ObjectId(targetId) : null },
+          ...(ObjectId.isValid(targetId) ? [{ _id: new ObjectId(targetId) }] : []),
           { _id: targetId },
         ],
-      });
+      };
+      const gw = await db.collection('giveaways').findOne(filter);
 
       if (gw) {
         const prizeTitle = gw.prize ? `🎁 ${gw.prize}` : '🎁 Organik Giveaway';
