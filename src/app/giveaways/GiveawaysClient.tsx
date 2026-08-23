@@ -347,7 +347,7 @@ function GiveawaysContent() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                   {user.avatar ? (
                     <img
-                      src={`https://cdn.discordapp.com/avatars/${user.id}/${user.avatar}.png`}
+                      src={`https://cdn.discordapp.com/avatars/${user.discordId}/${user.avatar}.png`}
                       alt={user.username}
                       style={{ width: '32px', height: '32px', borderRadius: '50%' }}
                     />
@@ -356,7 +356,7 @@ function GiveawaysContent() {
                   )}
                   <div>
                     <div style={{ fontWeight: '600', fontSize: '0.85rem' }}>@{user.username}</div>
-                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Discord ID: {user.id}</div>
+                    <div style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>Discord ID: {user.discordId}</div>
                   </div>
                 </div>
                 <div style={styles.pillSuccess}>
