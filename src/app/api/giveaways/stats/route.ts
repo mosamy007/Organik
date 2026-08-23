@@ -68,6 +68,7 @@ export async function GET(req: NextRequest) {
     // Count entries per giveaway
     const entriesPerGiveawayMap = new Map<string, number>();
     const uniqueUserSet = new Set<string>();
+    const uniqueWinnerSet = new Set<string>();
 
     for (const entry of allEntries) {
       if (entry.discordId) {
@@ -81,8 +82,16 @@ export async function GET(req: NextRequest) {
     const enrichedGiveaways = filteredGiveaways.map((gw) => {
       const gwIdStr = String(gw._id);
       const entriesCount = entriesPerGiveawayMap.get(gwIdStr) || 0;
-      const winnerCount = Array.isArray(gw.winners) ? gw.winners.length : 0;
+      const winnersList = Array.isArray(gw.winners) ? gw.winners : [];
+      const winnerCount = winnersList.length;
       totalWins += winnerCount;
+
+      for (const w of winnersList) {
+        const wId = typeof w === 'object' && w !== null ? (w.discordId || String(w)) : String(w);
+        if (wId) {
+          uniqueWinnerSet.add(wId);
+        }
+      }
 
       return {
         _id: gwIdStr,
@@ -91,7 +100,7 @@ export async function GET(req: NextRequest) {
         status: gw.status || 'active',
         winnerCountRequired: gw.winnerCount || 1,
         winnerCountActual: winnerCount,
-        winners: gw.winners || [],
+        winners: winnersList,
         entriesCount,
         endTime: gw.endTime,
         createdAt: gw.createdAt || (gw._id?.getTimestamp ? gw._id.getTimestamp() : gw.endTime),
@@ -109,6 +118,7 @@ export async function GET(req: NextRequest) {
       stats: {
         totalGiveaways: filteredGiveaways.length,
         uniqueUsers: uniqueUserSet.size,
+        uniqueWinners: uniqueWinnerSet.size,
         totalWins,
         totalEntries: allEntries.length,
         topGiveaways,

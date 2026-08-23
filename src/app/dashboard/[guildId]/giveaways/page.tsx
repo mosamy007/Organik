@@ -530,16 +530,19 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
           </div>
 
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Users / Participants</span>
+            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Unique Participants</span>
             <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#38bdf8', marginTop: '4px' }}>
               {loadingStats ? '...' : (statsData?.uniqueUsers || 0).toLocaleString()}
             </div>
           </div>
 
           <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
-            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Wins / Winners</span>
+            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Unique Winners</span>
             <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#fbbf24', marginTop: '4px' }}>
-              {loadingStats ? '...' : (statsData?.totalWins || 0).toLocaleString()}
+              {loadingStats ? '...' : (statsData?.uniqueWinners || 0).toLocaleString()}
+            </div>
+            <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', marginTop: '2px' }}>
+              {(statsData?.totalWins || 0).toLocaleString()} Winning Slots Awarded
             </div>
           </div>
 
