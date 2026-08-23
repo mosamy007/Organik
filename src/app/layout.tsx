@@ -5,8 +5,8 @@ import { DiscordAuthProvider } from '@/components/DiscordAuthProvider';
 import Navbar from '@/components/Navbar';
 
 export const metadata: Metadata = {
-  title: 'Organik Bot - Web3 Discord Manager & NFT Verification Portal',
-  description: 'Manage giveaways, verify NFT holdings/traits, send messages, and configure Collab.Land-style verification roles for your Discord server.',
+  title: 'Organik Bot',
+  description: 'Organik Bot Web3 Discord Management Portal.',
   icons: {
     icon: '/favicon.ico',
   },
