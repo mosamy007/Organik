@@ -109,11 +109,66 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
     }
   };
 
+  // Analytics State
+  const [statsTimeframe, setStatsTimeframe] = useState<'7d' | '30d' | '90d' | '1y' | 'all'>('30d');
+  const [statsData, setStatsData] = useState<any>(null);
+  const [loadingStats, setLoadingStats] = useState(false);
+
+  const loadStats = async (timeframe: string = statsTimeframe) => {
+    setLoadingStats(true);
+    try {
+      const res = await fetch(`/api/giveaways/stats?guildId=${guildId}&timeframe=${timeframe}`);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.success) {
+          setStatsData(data.stats);
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching giveaway stats:', err);
+    } finally {
+      setLoadingStats(false);
+    }
+  };
+
   useEffect(() => {
     loadGiveaways();
     loadRoles();
     loadChannels();
+    loadStats(statsTimeframe);
   }, [guildId]);
+
+  const handleExportAllGiveawaysCSV = () => {
+    if (!statsData || !statsData.allGiveaways || statsData.allGiveaways.length === 0) {
+      alert('No giveaway stats available to export.');
+      return;
+    }
+
+    const headers = ['Prize', 'Status', 'Entries Count', 'Winners Count', 'Winner Discord IDs', 'End Time', 'Created At'];
+    const rows = statsData.allGiveaways.map((gw: any) => {
+      const prize = gw.prize || '';
+      const status = gw.status || '';
+      const entries = gw.entriesCount || 0;
+      const winnersCount = gw.winnerCountActual || 0;
+      const winnersList = Array.isArray(gw.winners) ? gw.winners.join('; ') : '';
+      const endTime = gw.endTime || '';
+      const createdAt = gw.createdAt || '';
+
+      return [prize, status, entries, winnersCount, winnersList, endTime, createdAt]
+        .map((val) => `"${String(val || '').replace(/"/g, '""')}"`)
+        .join(',');
+    });
+
+    const csvContent = [headers.join(','), ...rows].join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.setAttribute('download', `server_giveaways_analytics_${statsTimeframe}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
 
   const handleAddTask = (type: 'wallet_input' | 'custom_link' | 'custom_text') => {
     const id = `t-${Date.now()}`;
@@ -405,6 +460,135 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
           <h1 className="page-title">Web3 Giveaway Manager</h1>
           <p className="page-subtitle">Configure custom server giveaways featuring entry role gates and task list verifications.</p>
         </div>
+      </div>
+
+      {/* Giveaway Analytics & Statistics Card */}
+      <div className="glass-card" style={{ padding: '24px', borderRadius: '16px', background: 'rgba(15, 15, 20, 0.6)', border: '1px solid rgba(255, 255, 255, 0.08)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '16px', marginBottom: '20px' }}>
+          <div>
+            <h2 style={{ fontSize: '1.2rem', fontWeight: '700', color: 'var(--text-primary)', display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+              📊 Server Giveaway Analytics
+            </h2>
+            <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)', margin: '4px 0 0 0' }}>
+              Real-time participation statistics and performance metrics across giveaways.
+            </p>
+          </div>
+
+          <div style={{ display: 'flex', gap: '10px', alignItems: 'center', flexWrap: 'wrap' }}>
+            {/* Timeframe selector */}
+            <div style={{ display: 'flex', background: 'rgba(255, 255, 255, 0.04)', borderRadius: '8px', padding: '3px', border: '1px solid rgba(255,255,255,0.08)' }}>
+              {[
+                { id: '7d', label: '7 Days' },
+                { id: '30d', label: '30 Days' },
+                { id: '90d', label: '90 Days' },
+                { id: '1y', label: '1 Year' },
+                { id: 'all', label: 'All Time' },
+              ].map((tf) => (
+                <button
+                  key={tf.id}
+                  type="button"
+                  onClick={() => {
+                    setStatsTimeframe(tf.id as any);
+                    loadStats(tf.id);
+                  }}
+                  style={{
+                    background: statsTimeframe === tf.id ? 'var(--primary)' : 'transparent',
+                    color: statsTimeframe === tf.id ? '#ffffff' : 'var(--text-muted)',
+                    border: 'none',
+                    borderRadius: '6px',
+                    padding: '4px 10px',
+                    fontSize: '0.75rem',
+                    fontWeight: '600',
+                    cursor: 'pointer',
+                    transition: 'all 0.2s ease',
+                  }}
+                >
+                  {tf.label}
+                </button>
+              ))}
+            </div>
+
+            {/* CSV Export Button */}
+            <button
+              type="button"
+              onClick={handleExportAllGiveawaysCSV}
+              className="btn btn-secondary"
+              style={{ fontSize: '0.78rem', padding: '6px 12px', color: '#10b981', borderColor: 'rgba(16,185,129,0.3)', background: 'rgba(16,185,129,0.1)' }}
+            >
+              📥 Export All Analytics (CSV)
+            </button>
+          </div>
+        </div>
+
+        {/* 4 Big KPI Metric Counters */}
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: '16px', marginBottom: '24px' }}>
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Giveaways</span>
+            <div style={{ fontSize: '1.8rem', fontWeight: '800', color: 'var(--text-primary)', marginTop: '4px' }}>
+              {loadingStats ? '...' : (statsData?.totalGiveaways || 0).toLocaleString()}
+            </div>
+          </div>
+
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Users / Participants</span>
+            <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#38bdf8', marginTop: '4px' }}>
+              {loadingStats ? '...' : (statsData?.uniqueUsers || 0).toLocaleString()}
+            </div>
+          </div>
+
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Wins / Winners</span>
+            <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#fbbf24', marginTop: '4px' }}>
+              {loadingStats ? '...' : (statsData?.totalWins || 0).toLocaleString()}
+            </div>
+          </div>
+
+          <div style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid rgba(255,255,255,0.06)', borderRadius: '12px', padding: '16px', textAlign: 'center' }}>
+            <span style={{ fontSize: '0.75rem', textTransform: 'uppercase', color: 'var(--text-muted)', letterSpacing: '0.5px' }}>Total Entries</span>
+            <div style={{ fontSize: '1.8rem', fontWeight: '800', color: '#34d399', marginTop: '4px' }}>
+              {loadingStats ? '...' : (statsData?.totalEntries || 0).toLocaleString()}
+            </div>
+          </div>
+        </div>
+
+        {/* Top Giveaways by Entries Bar Ranking */}
+        {statsData?.topGiveaways && statsData.topGiveaways.length > 0 && (
+          <div style={{ marginTop: '16px' }}>
+            <h3 style={{ fontSize: '0.85rem', fontWeight: '700', color: 'var(--text-secondary)', marginBottom: '12px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+              🏆 Top Giveaways by Entries
+            </h3>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {statsData.topGiveaways.map((gw: any, idx: number) => {
+                const maxEntries = statsData.topGiveaways[0]?.entriesCount || 1;
+                const percentage = Math.max(5, Math.min(100, (gw.entriesCount / maxEntries) * 100));
+
+                return (
+                  <div key={gw._id || idx} style={{ display: 'flex', flexDirection: 'column', gap: '4px' }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '0.8rem' }}>
+                      <span style={{ fontWeight: '600', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '70%' }}>
+                        #{idx + 1} {gw.prize}
+                      </span>
+                      <span style={{ color: '#34d399', fontWeight: '700' }}>
+                        {gw.entriesCount.toLocaleString()} Entries
+                      </span>
+                    </div>
+                    <div style={{ width: '100%', height: '8px', background: 'rgba(255,255,255,0.05)', borderRadius: '4px', overflow: 'hidden' }}>
+                      <div
+                        style={{
+                          width: `${percentage}%`,
+                          height: '100%',
+                          background: 'linear-gradient(90deg, #10b981 0%, #34d399 100%)',
+                          borderRadius: '4px',
+                          transition: 'width 0.4s ease',
+                        }}
+                      />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="page-two-col">
