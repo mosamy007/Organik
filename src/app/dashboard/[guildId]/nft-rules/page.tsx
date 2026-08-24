@@ -26,8 +26,7 @@ export default function NftRulesPage({ params }: PageProps) {
   const [ruleType, setRuleType] = useState<'quantity' | 'trait' | 'trait_count'>('quantity');
   const [minQuantity, setMinQuantity] = useState('1');
   const [maxQuantity, setMaxQuantity] = useState('');
-  const [minTraitCount, setMinTraitCount] = useState('1');
-  const [maxTraitCount, setMaxTraitCount] = useState('');
+  const [traitCount, setTraitCount] = useState('11');
   const [traitType, setTraitType] = useState('');
   const [traitValue, setTraitValue] = useState('');
 
@@ -192,9 +191,9 @@ export default function NftRulesPage({ params }: PageProps) {
       return;
     }
 
-    if (ruleType === 'trait_count' && (!minTraitCount || isNaN(Number(minTraitCount)))) {
+    if (ruleType === 'trait_count' && (!traitCount || isNaN(Number(traitCount)))) {
       setSubmitStatus('error');
-      setStatusMessage('Please enter a valid minimum trait count.');
+      setStatusMessage('Please enter a valid trait count number (e.g. 11).');
       return;
     }
 
@@ -208,8 +207,8 @@ export default function NftRulesPage({ params }: PageProps) {
         roleId: selectedRoleId,
         network,
         ruleType,
-        minQuantity: ruleType === 'quantity' ? Number(minQuantity) : ruleType === 'trait_count' ? Number(minTraitCount) : undefined,
-        maxQuantity: ruleType === 'quantity' && maxQuantity !== '' ? Number(maxQuantity) : ruleType === 'trait_count' && maxTraitCount !== '' ? Number(maxTraitCount) : undefined,
+        minQuantity: ruleType === 'quantity' ? Number(minQuantity) : ruleType === 'trait_count' ? Number(traitCount) : undefined,
+        maxQuantity: ruleType === 'quantity' && maxQuantity !== '' ? Number(maxQuantity) : undefined,
         traitType: ruleType === 'trait' ? traitType : undefined,
         traitValue: ruleType === 'trait' ? traitValue : undefined,
       };
@@ -229,8 +228,7 @@ export default function NftRulesPage({ params }: PageProps) {
         setContractAddress('');
         setMinQuantity('1');
         setMaxQuantity('');
-        setMinTraitCount('1');
-        setMaxTraitCount('');
+        setTraitCount('11');
         setTraitType('');
         setTraitValue('');
         setFetchedTraits({});
@@ -481,32 +479,20 @@ export default function NftRulesPage({ params }: PageProps) {
             )}
 
             {ruleType === 'trait_count' && (
-              <div className="form-row-inline animate-fade-in">
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label">Min Trait Count</label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    min="1"
-                    value={minTraitCount}
-                    onChange={(e) => setMinTraitCount(e.target.value)}
-                    placeholder="e.g. 5"
-                    required
-                  />
-                </div>
-                <div className="form-group" style={{ flex: 1 }}>
-                  <label className="form-label">
-                    Max Trait Count <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>(Optional)</span>
-                  </label>
-                  <input
-                    type="number"
-                    className="form-input"
-                    min={minTraitCount || "1"}
-                    value={maxTraitCount}
-                    onChange={(e) => setMaxTraitCount(e.target.value)}
-                    placeholder="e.g. 8 (Leave empty for >= Min)"
-                  />
-                </div>
+              <div className="form-group animate-fade-in">
+                <label className="form-label">NFT Trait Count (Exact Number of Traits)</label>
+                <input
+                  type="number"
+                  className="form-input"
+                  min="1"
+                  value={traitCount}
+                  onChange={(e) => setTraitCount(e.target.value)}
+                  placeholder="e.g. 11 or 6"
+                  required
+                />
+                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px', display: 'block' }}>
+                  Users must hold an NFT in this collection with exactly this number of traits (e.g. 11 traits).
+                </span>
               </div>
             )}
 
@@ -685,12 +671,7 @@ export default function NftRulesPage({ params }: PageProps) {
                             </span>
                           ) : rule.ruleType === 'trait_count' ? (
                             <span>
-                              Condition: NFT Trait Count{' '}
-                              <strong>
-                                {rule.maxTraitCount || rule.maxQuantity
-                                  ? `${rule.minTraitCount || rule.minQuantity} – ${rule.maxTraitCount || rule.maxQuantity}`
-                                  : `>= ${rule.minTraitCount || rule.minQuantity}`}
-                              </strong>
+                              Condition: NFT Trait Count = <strong>{rule.traitCount || rule.minTraitCount || rule.minQuantity}</strong>
                             </span>
                           ) : (
                             <span>Condition: NFT Trait <strong>{rule.traitType} = {rule.traitValue}</strong></span>

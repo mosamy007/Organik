@@ -411,22 +411,38 @@ export async function verifyTraitsViaOpenSea(
 }
 
 /**
- * Helper to compute the total trait/attribute count of an NFT.
+ * Helper to check if an NFT matches a specific target trait count (e.g. 11 or 6).
  */
-export function getNFTTraitCount(attributes: any[]): number {
-  if (!Array.isArray(attributes)) return 0;
-  // Check if there is an explicit "Trait Count" or "Count" trait in the attributes
-  const explicitCountAttr = attributes.find((attr: any) => {
+export function isNFTMatchingTraitCount(attributes: any[], targetTraitCount: number): boolean {
+  if (!Array.isArray(attributes)) return false;
+
+  const targetStr = String(targetTraitCount).trim();
+
+  // 1. Direct check on raw attribute count (number of traits on the NFT)
+  const validAttributes = attributes.filter((attr: any) => {
     const t = (attr.trait_type || attr.name || '').toString().trim().toLowerCase();
-    return t === 'trait count' || t === 'traitcount' || t === 'attribute count';
+    return t !== 'trait count' && t !== 'traitcount';
   });
 
-  if (explicitCountAttr && explicitCountAttr.value !== undefined && !isNaN(Number(explicitCountAttr.value))) {
-    return Number(explicitCountAttr.value);
+  if (validAttributes.length === targetTraitCount || attributes.length === targetTraitCount) {
+    return true;
   }
 
-  // Otherwise, default to the number of non-empty attributes
-  return attributes.filter((attr: any) => attr.trait_type || attr.name || attr.value !== undefined).length;
+  // 2. Check if any explicit attribute indicates the trait count (e.g. "Traits": 11, "Traits": "Traits11", "Traits11")
+  return attributes.some((attr: any) => {
+    const typeStr = (attr.trait_type || attr.name || '').toString().trim().toLowerCase();
+    const valStr = (attr.value !== undefined && attr.value !== null ? attr.value : '').toString().trim().toLowerCase();
+
+    if (valStr === targetStr || valStr === `traits${targetStr}` || valStr === `traits ${targetStr}`) {
+      return true;
+    }
+
+    if (typeStr === targetStr || typeStr === `traits${targetStr}` || typeStr === `traits ${targetStr}`) {
+      return true;
+    }
+
+    return false;
+  });
 }
 
 /**
@@ -435,8 +451,7 @@ export function getNFTTraitCount(attributes: any[]): number {
 export async function verifyTraitCountViaAlchemy(
   contractAddress: string,
   walletAddress: string,
-  minTraitCount: number,
-  maxTraitCount?: number,
+  targetTraitCount: number,
   network = 'ethereum'
 ): Promise<boolean> {
   const apiKey = process.env.ALCHEMY_API_KEY;
@@ -465,12 +480,7 @@ export async function verifyTraitCountViaAlchemy(
 
     for (const nft of ownedNfts) {
       const attributes = nft.raw?.metadata?.attributes || nft.raw?.metadata?.traits || [];
-      const count = getNFTTraitCount(attributes);
-
-      const passesMin = count >= minTraitCount;
-      const passesMax = maxTraitCount === undefined || maxTraitCount === null || isNaN(maxTraitCount) || count <= maxTraitCount;
-
-      if (passesMin && passesMax) {
+      if (isNFTMatchingTraitCount(attributes, targetTraitCount)) {
         return true;
       }
     }
@@ -487,8 +497,7 @@ export async function verifyTraitCountViaAlchemy(
 export async function verifyTraitCountViaOpenSea(
   contractAddress: string,
   walletAddress: string,
-  minTraitCount: number,
-  maxTraitCount?: number,
+  targetTraitCount: number,
   network = 'ethereum'
 ): Promise<boolean> {
   const apiKey = process.env.OPENSEA_API_KEY;
@@ -536,12 +545,7 @@ export async function verifyTraitCountViaOpenSea(
         if (nft.contract?.toLowerCase() === cleanContract) {
           const metadata = nft.metadata || {};
           const attributes = metadata.attributes || metadata.traits || nft.traits || [];
-          const count = getNFTTraitCount(attributes);
-
-          const passesMin = count >= minTraitCount;
-          const passesMax = maxTraitCount === undefined || maxTraitCount === null || isNaN(maxTraitCount) || count <= maxTraitCount;
-
-          if (passesMin && passesMax) {
+          if (isNFTMatchingTraitCount(attributes, targetTraitCount)) {
             return true;
           }
         }

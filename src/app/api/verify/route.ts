@@ -155,14 +155,13 @@ export async function POST(req: NextRequest) {
 
             }
           } else if (ruleType === 'trait_count') {
-            const minCount = Number(rule.minTraitCount) || 1;
-            const maxCount = rule.maxTraitCount ? Number(rule.maxTraitCount) : undefined;
+            const targetCount = Number(rule.traitCount || rule.minTraitCount || rule.minQuantity) || 1;
 
             for (const addr of walletAddresses) {
               if (process.env.OPENSEA_API_KEY) {
                 try {
                   isEligible = await withTimeout(
-                    verifyTraitCountViaOpenSea(contractAddress, addr, minCount, maxCount, network),
+                    verifyTraitCountViaOpenSea(contractAddress, addr, targetCount, network),
                     7000,
                     'OpenSea trait count verification timed out.'
                   );
@@ -174,7 +173,7 @@ export async function POST(req: NextRequest) {
               if (!isEligible && process.env.ALCHEMY_API_KEY) {
                 try {
                   isEligible = await withTimeout(
-                    verifyTraitCountViaAlchemy(contractAddress, addr, minCount, maxCount, network),
+                    verifyTraitCountViaAlchemy(contractAddress, addr, targetCount, network),
                     7000,
                     'Alchemy trait count verification timed out.'
                   );
@@ -415,13 +414,12 @@ export async function POST(req: NextRequest) {
         detailsMessage = manualResult.message;
       }
     } else if (ruleType === 'trait_count') {
-      const minCount = Number(rule.minTraitCount) || 1;
-      const maxCount = rule.maxTraitCount ? Number(rule.maxTraitCount) : undefined;
+      const targetCount = Number(rule.traitCount || rule.minTraitCount || rule.minQuantity) || 1;
 
       if (process.env.OPENSEA_API_KEY) {
         try {
           isEligible = await withTimeout(
-            verifyTraitCountViaOpenSea(contractAddress, walletAddress, minCount, maxCount, network),
+            verifyTraitCountViaOpenSea(contractAddress, walletAddress, targetCount, network),
             7000,
             'OpenSea trait count verification timed out.'
           );
@@ -436,7 +434,7 @@ export async function POST(req: NextRequest) {
       if (!isEligible && process.env.ALCHEMY_API_KEY) {
         try {
           isEligible = await withTimeout(
-            verifyTraitCountViaAlchemy(contractAddress, walletAddress, minCount, maxCount, network),
+            verifyTraitCountViaAlchemy(contractAddress, walletAddress, targetCount, network),
             7000,
             'Alchemy trait count verification timed out.'
           );
@@ -449,9 +447,7 @@ export async function POST(req: NextRequest) {
       }
 
       if (!isEligible) {
-        detailsMessage = maxCount
-          ? `No NFT found with Trait Count between ${minCount} and ${maxCount}.`
-          : `No NFT found with at least ${minCount} Traits.`;
+        detailsMessage = `No NFT found with Trait Count of ${targetCount}.`;
       }
     }
 
@@ -587,16 +583,12 @@ export async function PUT(req: NextRequest) {
       newRule.traitType = traitType.trim();
       newRule.traitValue = traitValue.trim();
     } else if (ruleType === 'trait_count') {
-      if (minQuantity === undefined || minQuantity === null || isNaN(Number(minQuantity))) {
-        return NextResponse.json({ error: 'Minimum Trait Count is required' }, { status: 400 });
+      const rawCount = minQuantity !== undefined && minQuantity !== null && minQuantity !== '' ? minQuantity : 1;
+      const countVal = Number(rawCount);
+      if (isNaN(countVal) || countVal < 1) {
+        return NextResponse.json({ error: 'A valid Trait Count number is required' }, { status: 400 });
       }
-      newRule.minTraitCount = Math.max(1, Number(minQuantity) || 1);
-      if (maxQuantity !== undefined && maxQuantity !== null && maxQuantity !== '') {
-        const parsedMax = Number(maxQuantity);
-        if (!isNaN(parsedMax) && parsedMax >= newRule.minTraitCount) {
-          newRule.maxTraitCount = parsedMax;
-        }
-      }
+      newRule.traitCount = countVal;
     }
 
     const result = await db.collection('nft_rules').insertOne(newRule);
