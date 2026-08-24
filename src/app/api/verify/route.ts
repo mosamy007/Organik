@@ -8,6 +8,8 @@ import {
   verifySpecificTokenTraits,
   verifyTraitsViaAlchemy,
   verifyTraitsViaOpenSea,
+  verifyTraitCountViaAlchemy,
+  verifyTraitCountViaOpenSea,
   withTimeout,
 } from '@/lib/eth-verify';
 import { assignGuildRole } from '@/lib/discord-api';
@@ -148,6 +150,36 @@ export async function POST(req: NextRequest) {
                   );
                 } catch (alErr) {
                   console.error('Alchemy auto-verify error:', alErr);
+                }
+              }
+
+            }
+          } else if (ruleType === 'trait_count') {
+            const minCount = Number(rule.minTraitCount) || 1;
+            const maxCount = rule.maxTraitCount ? Number(rule.maxTraitCount) : undefined;
+
+            for (const addr of walletAddresses) {
+              if (process.env.OPENSEA_API_KEY) {
+                try {
+                  isEligible = await withTimeout(
+                    verifyTraitCountViaOpenSea(contractAddress, addr, minCount, maxCount, network),
+                    7000,
+                    'OpenSea trait count verification timed out.'
+                  );
+                } catch (osErr) {
+                  console.error('OpenSea auto-verify trait count error:', osErr);
+                }
+              }
+
+              if (!isEligible && process.env.ALCHEMY_API_KEY) {
+                try {
+                  isEligible = await withTimeout(
+                    verifyTraitCountViaAlchemy(contractAddress, addr, minCount, maxCount, network),
+                    7000,
+                    'Alchemy trait count verification timed out.'
+                  );
+                } catch (alErr) {
+                  console.error('Alchemy auto-verify trait count error:', alErr);
                 }
               }
 
@@ -382,16 +414,44 @@ export async function POST(req: NextRequest) {
         isEligible = manualResult.success;
         detailsMessage = manualResult.message;
       }
+    } else if (ruleType === 'trait_count') {
+      const minCount = Number(rule.minTraitCount) || 1;
+      const maxCount = rule.maxTraitCount ? Number(rule.maxTraitCount) : undefined;
 
-      // If still not verified and no token ID was provided, ask the user to provide one
-      if (!isEligible && !tokenId && !process.env.ALCHEMY_API_KEY) {
-        return NextResponse.json(
-          {
-            error: 'Trait verification requires a Token ID. Please input a Token ID you own to proceed with verification.',
-            requiresTokenId: true,
-          },
-          { status: 400 }
-        );
+      if (process.env.OPENSEA_API_KEY) {
+        try {
+          isEligible = await withTimeout(
+            verifyTraitCountViaOpenSea(contractAddress, walletAddress, minCount, maxCount, network),
+            7000,
+            'OpenSea trait count verification timed out.'
+          );
+          if (isEligible) {
+            detailsMessage = 'Matching Trait Count verified automatically via OpenSea API.';
+          }
+        } catch (osErr) {
+          console.error('OpenSea web-verify trait count error:', osErr);
+        }
+      }
+
+      if (!isEligible && process.env.ALCHEMY_API_KEY) {
+        try {
+          isEligible = await withTimeout(
+            verifyTraitCountViaAlchemy(contractAddress, walletAddress, minCount, maxCount, network),
+            7000,
+            'Alchemy trait count verification timed out.'
+          );
+          if (isEligible) {
+            detailsMessage = 'Matching Trait Count verified automatically via Alchemy API.';
+          }
+        } catch (alErr) {
+          console.error('Alchemy web-verify trait count error:', alErr);
+        }
+      }
+
+      if (!isEligible) {
+        detailsMessage = maxCount
+          ? `No NFT found with Trait Count between ${minCount} and ${maxCount}.`
+          : `No NFT found with at least ${minCount} Traits.`;
       }
     }
 
@@ -526,6 +586,17 @@ export async function PUT(req: NextRequest) {
       }
       newRule.traitType = traitType.trim();
       newRule.traitValue = traitValue.trim();
+    } else if (ruleType === 'trait_count') {
+      if (minQuantity === undefined || minQuantity === null || isNaN(Number(minQuantity))) {
+        return NextResponse.json({ error: 'Minimum Trait Count is required' }, { status: 400 });
+      }
+      newRule.minTraitCount = Math.max(1, Number(minQuantity) || 1);
+      if (maxQuantity !== undefined && maxQuantity !== null && maxQuantity !== '') {
+        const parsedMax = Number(maxQuantity);
+        if (!isNaN(parsedMax) && parsedMax >= newRule.minTraitCount) {
+          newRule.maxTraitCount = parsedMax;
+        }
+      }
     }
 
     const result = await db.collection('nft_rules').insertOne(newRule);

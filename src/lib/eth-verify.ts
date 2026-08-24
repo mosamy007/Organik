@@ -411,6 +411,154 @@ export async function verifyTraitsViaOpenSea(
 }
 
 /**
+ * Helper to compute the total trait/attribute count of an NFT.
+ */
+export function getNFTTraitCount(attributes: any[]): number {
+  if (!Array.isArray(attributes)) return 0;
+  // Check if there is an explicit "Trait Count" or "Count" trait in the attributes
+  const explicitCountAttr = attributes.find((attr: any) => {
+    const t = (attr.trait_type || attr.name || '').toString().trim().toLowerCase();
+    return t === 'trait count' || t === 'traitcount' || t === 'attribute count';
+  });
+
+  if (explicitCountAttr && explicitCountAttr.value !== undefined && !isNaN(Number(explicitCountAttr.value))) {
+    return Number(explicitCountAttr.value);
+  }
+
+  // Otherwise, default to the number of non-empty attributes
+  return attributes.filter((attr: any) => attr.trait_type || attr.name || attr.value !== undefined).length;
+}
+
+/**
+ * Automates NFT Trait Count checking using Alchemy's NFT API.
+ */
+export async function verifyTraitCountViaAlchemy(
+  contractAddress: string,
+  walletAddress: string,
+  minTraitCount: number,
+  maxTraitCount?: number,
+  network = 'ethereum'
+): Promise<boolean> {
+  const apiKey = process.env.ALCHEMY_API_KEY;
+  if (!apiKey) return false;
+
+  const ALCHEMY_SUBDOMAINS: Record<string, string> = {
+    ethereum: 'eth-mainnet',
+    sepolia: 'eth-sepolia',
+    polygon: 'polygon-mainnet',
+    arbitrum: 'arb-mainnet',
+    optimism: 'opt-mainnet',
+    base: 'base-mainnet',
+  };
+
+  const cleanContract = contractAddress.trim().toLowerCase();
+  const cleanWallet = walletAddress.trim().toLowerCase();
+  const subdomain = ALCHEMY_SUBDOMAINS[network] || 'eth-mainnet';
+  const url = `https://${subdomain}.g.alchemy.com/nft/v3/${apiKey}/getNFTsForOwner?owner=${cleanWallet}&contractAddresses[]=${cleanContract}&withMetadata=true`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) return false;
+
+    const data = await res.json();
+    const ownedNfts = data.ownedNfts || [];
+
+    for (const nft of ownedNfts) {
+      const attributes = nft.raw?.metadata?.attributes || nft.raw?.metadata?.traits || [];
+      const count = getNFTTraitCount(attributes);
+
+      const passesMin = count >= minTraitCount;
+      const passesMax = maxTraitCount === undefined || maxTraitCount === null || isNaN(maxTraitCount) || count <= maxTraitCount;
+
+      if (passesMin && passesMax) {
+        return true;
+      }
+    }
+    return false;
+  } catch (err) {
+    console.error('Alchemy trait count verification error:', err);
+    return false;
+  }
+}
+
+/**
+ * Automates NFT Trait Count checking using OpenSea's NFT API.
+ */
+export async function verifyTraitCountViaOpenSea(
+  contractAddress: string,
+  walletAddress: string,
+  minTraitCount: number,
+  maxTraitCount?: number,
+  network = 'ethereum'
+): Promise<boolean> {
+  const apiKey = process.env.OPENSEA_API_KEY;
+  if (!apiKey) return false;
+
+  const OPENSEA_CHAINS: Record<string, string> = {
+    ethereum: 'ethereum',
+    sepolia: 'sepolia',
+    polygon: 'polygon',
+    arbitrum: 'arbitrum',
+    optimism: 'optimism',
+    base: 'base',
+  };
+
+  const chain = OPENSEA_CHAINS[network];
+  if (!chain) return false;
+
+  const cleanContract = contractAddress.trim().toLowerCase();
+  const cleanWallet = walletAddress.trim().toLowerCase();
+  const url = `https://api.opensea.io/api/v2/chain/${chain}/account/${cleanWallet}/nfts`;
+
+  try {
+    let nextToken = '';
+    let pageCount = 0;
+
+    do {
+      let pageUrl = url;
+      if (nextToken) {
+        pageUrl += `?next=${nextToken}`;
+      }
+
+      const res = await fetch(pageUrl, {
+        headers: {
+          'x-api-key': apiKey,
+          'Accept': 'application/json',
+        },
+      });
+
+      if (!res.ok) break;
+
+      const data = await res.json();
+      const nfts = data.nfts || [];
+
+      for (const nft of nfts) {
+        if (nft.contract?.toLowerCase() === cleanContract) {
+          const metadata = nft.metadata || {};
+          const attributes = metadata.attributes || metadata.traits || nft.traits || [];
+          const count = getNFTTraitCount(attributes);
+
+          const passesMin = count >= minTraitCount;
+          const passesMax = maxTraitCount === undefined || maxTraitCount === null || isNaN(maxTraitCount) || count <= maxTraitCount;
+
+          if (passesMin && passesMax) {
+            return true;
+          }
+        }
+      }
+
+      nextToken = data.next || '';
+      pageCount++;
+    } while (nextToken && pageCount < 4);
+
+    return false;
+  } catch (err) {
+    console.error('OpenSea trait count verification error:', err);
+    return false;
+  }
+}
+
+/**
  * Helper to wrap any Promise with a timeout.
  */
 export function withTimeout<T>(
