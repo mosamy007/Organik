@@ -63,6 +63,7 @@ export async function GET(req: NextRequest) {
             discordId,
             username: entry?.discordUsername || (typeof w === 'object' && w?.username ? w.username : discordId),
             walletAddress: entry?.walletAddress || (typeof w === 'object' && w?.walletAddress ? w.walletAddress : ''),
+            xHandle: entry?.xHandle || (typeof w === 'object' && w?.xHandle ? w.xHandle : ''),
             customTextAnswers: entry?.customTextAnswers || (typeof w === 'object' && w?.customTextAnswers ? w.customTextAnswers : {})
           };
         });
@@ -109,6 +110,7 @@ export async function GET(req: NextRequest) {
             discordId,
             username: entry?.discordUsername || (typeof w === 'object' && w?.username ? w.username : discordId),
             walletAddress: entry?.walletAddress || (typeof w === 'object' && w?.walletAddress ? w.walletAddress : ''),
+            xHandle: entry?.xHandle || (typeof w === 'object' && w?.xHandle ? w.xHandle : ''),
             customTextAnswers: entry?.customTextAnswers || (typeof w === 'object' && w?.customTextAnswers ? w.customTextAnswers : {})
           };
         });
@@ -252,7 +254,7 @@ export async function PUT(req: NextRequest) {
   }
 
   try {
-    const { giveawayId, walletAddress, customTextAnswers, tasksCompleted } = await req.json();
+    const { giveawayId, walletAddress, customTextAnswers, xHandles, tasksCompleted } = await req.json();
 
     if (!giveawayId) {
       return NextResponse.json({ error: 'Missing giveawayId' }, { status: 400 });
@@ -325,6 +327,9 @@ export async function PUT(req: NextRequest) {
       completedTasksMap[task.id] = isCompleted;
     }
 
+    const rawXHandle = xHandles ? (Object.values(xHandles).find((h: any) => typeof h === 'string' && h.trim().length > 0) as string | undefined) : undefined;
+    const formattedXHandle = rawXHandle ? (rawXHandle.startsWith('@') ? rawXHandle : `@${rawXHandle}`) : null;
+
     // 3. Save Entry
     await db.collection('giveaway_entries').updateOne(
       { giveawayId, discordId: session.discordId },
@@ -334,6 +339,8 @@ export async function PUT(req: NextRequest) {
           discordId: session.discordId,
           discordUsername: session.username,
           walletAddress: walletAddress || null,
+          xHandle: formattedXHandle,
+          xHandles: xHandles || {},
           customTextAnswers: customTextAnswers || {},
           tasksCompleted: completedTasksMap,
           joinedAt: new Date(),

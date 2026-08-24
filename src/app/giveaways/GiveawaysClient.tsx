@@ -200,6 +200,7 @@ function GiveawaysContent() {
           giveawayId,
           walletAddress: hasWalletTask ? localWalletInput : undefined,
           customTextAnswers: customTextInputs,
+          xHandles,
           tasksCompleted,
         }),
       });

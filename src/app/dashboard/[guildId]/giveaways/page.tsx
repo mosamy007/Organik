@@ -344,15 +344,16 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
     }
 
     const customTextTasks = (gw.tasks || []).filter((t: any) => t.type === 'custom_text');
-    const headers = ['Username', 'Discord ID', 'Wallet Address', ...customTextTasks.map((t: any) => t.label || 'Custom Text Response')];
+    const headers = ['Discord Username', 'Discord ID', 'X Handle (@username)', 'Wallet Address', ...customTextTasks.map((t: any) => t.label || 'Custom Text Response')];
 
     const rows = gw.winners.map((w: any) => {
-      const username = typeof w === 'object' ? w.username : '';
-      const discordId = typeof w === 'object' ? w.discordId : w;
-      const walletAddress = typeof w === 'object' ? w.walletAddress : '';
+      const username = typeof w === 'object' ? (w.username || '') : '';
+      const discordId = typeof w === 'object' ? (w.discordId || w) : w;
+      const xHandle = typeof w === 'object' ? (w.xHandle || '') : '';
+      const walletAddress = typeof w === 'object' ? (w.walletAddress || '') : '';
       const customAnswers = typeof w === 'object' && w.customTextAnswers ? w.customTextAnswers : {};
       const customVals = customTextTasks.map((t: any) => customAnswers[t.id] || '');
-      return [username, discordId, walletAddress, ...customVals].map(val => `"${String(val || '').replace(/"/g, '""')}"`).join(',');
+      return [username, discordId, xHandle, walletAddress, ...customVals].map(val => `"${String(val || '').replace(/"/g, '""')}"`).join(',');
     });
 
     const csvContent = [headers.join(','), ...rows].join('\n');
@@ -1009,10 +1010,13 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
                           {gw.winners && gw.winners.length > 0 ? (
                             gw.winners.map((w: any, idx: number) => {
                               const username = typeof w === 'object' ? (w.username || w.discordId) : w;
+                              const xHandle = typeof w === 'object' && w.xHandle ? ` (X: ${w.xHandle})` : '';
                               const wallet = typeof w === 'object' && w.walletAddress ? ` (${w.walletAddress})` : '';
                               return (
                                 <div key={idx} style={{ color: 'var(--text-primary)', wordBreak: 'break-all' }}>
-                                  • <strong>@{username}</strong>{wallet ? <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem' }}>{wallet}</span> : null}
+                                  • <strong>@{username}</strong>
+                                  {xHandle ? <span style={{ color: '#38bdf8', fontSize: '0.75rem', marginLeft: '4px' }}>{xHandle}</span> : null}
+                                  {wallet ? <span style={{ color: 'var(--text-muted)', fontSize: '0.75rem', marginLeft: '4px' }}>{wallet}</span> : null}
                                 </div>
                               );
                             })
