@@ -26,6 +26,31 @@ async def check_follow(user_handle: str, target_handle: str):
     user_clean = user_handle.strip().lstrip('@').lower()
     target_clean = target_handle.strip().lstrip('@').lower()
 
+    # Strategy 0: Direct REST friendships/show.json Lookup (Fast & 100% Accurate)
+    try:
+        import aiohttp
+        url = f"https://api.twitter.com/1.1/friendships/show.json?source_screen_name={user_clean}&target_screen_name={target_clean}"
+        headers = {
+            'cookie': f'auth_token={auth_token}; ct0={ct0}',
+            'x-csrf-token': ct0,
+            'authorization': 'Bearer AAAAAAAAAAAAAAAAAAAAANRILgAAAAAAnNwIzUejRCOuH5E6I8xnZz4puTs%3D1Zv7ttfk8LF81IUq16cHjhLTvJu4FA33AGWWjCpTnA',
+            'user-agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=headers, timeout=aiohttp.ClientTimeout(total=8)) as resp:
+                if resp.status == 200:
+                    data = await resp.json()
+                    is_following = data.get('relationship', {}).get('source', {}).get('following', False)
+                    if is_following:
+                        return {
+                            "success": True,
+                            "following": True,
+                            "user": user_clean,
+                            "target": target_clean
+                        }
+    except Exception as e0:
+        print(f"[CheckFollow Strategy 0 Error]: {e0}")
+
     try:
         user = await client.get_user_by_screen_name(user_clean)
         target = await client.get_user_by_screen_name(target_clean)

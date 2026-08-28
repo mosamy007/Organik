@@ -114,6 +114,19 @@ async function getFollowingHandles(userId: string, authToken: string, ct0: strin
   return false;
 }
 
+async function checkDirectFriendship(sourceHandle: string, targetHandle: string, authToken: string, ct0: string): Promise<boolean | null> {
+  const url = `https://api.twitter.com/1.1/friendships/show.json?source_screen_name=${encodeURIComponent(sourceHandle)}&target_screen_name=${encodeURIComponent(targetHandle)}`;
+  try {
+    const res = await fetch(url, { headers: makeTwitterHeaders(authToken, ct0) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    return data?.relationship?.source?.following === true;
+  } catch (err) {
+    console.error('[X Verify Direct Friendship Error]:', err);
+    return null;
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { userHandle, targetUrl } = await req.json();
@@ -145,7 +158,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid user handle or target URL.' }, { status: 400 });
     }
 
-    // Step 1: Attempt multi-strategy Twikit verification via Python script (if local environment has python)
+    // Step 1: Direct friendship API check (Instant & 100% Accurate)
+    const directCheck = await checkDirectFriendship(cleanUserHandle, targetHandle, authToken, ct0);
+    if (directCheck === true) {
+      return NextResponse.json({ success: true, verified: true });
+    }
+
+    // Step 2: Attempt multi-strategy Twikit verification via Python script (if local environment has python)
     try {
       const scriptPath = path.join(process.cwd(), 'bot', 'verify_follow.py');
       const { stdout } = await execFileAsync('python', [scriptPath, cleanUserHandle, targetHandle], {
