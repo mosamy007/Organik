@@ -210,7 +210,7 @@ function GiveawaysContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           giveawayId,
-          walletAddress: hasWalletTask ? localWalletInput : undefined,
+          walletAddress: walletTask ? localWalletInput : undefined,
           customTextAnswers: customTextInputs,
           xHandles,
           tasksCompleted,
@@ -456,6 +456,11 @@ function GiveawaysContent() {
                   const isSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(cleanVal);
                   const isValidWallet = isSolanaTask ? isSolana : (isEvm || isSolana);
 
+                  let displayLabel = task.label || (isSolanaTask ? 'Solana Wallet Submission' : 'Solana / EVM Wallet Submission');
+                  displayLabel = displayLabel
+                    .replace(/Submit EVM Wallet Address/i, 'Submit Solana or EVM Wallet Address')
+                    .replace(/Ethereum Wallet Submission/i, 'Solana or EVM Wallet Submission');
+
                   return (
                     <div
                       key={task.id}
@@ -463,15 +468,15 @@ function GiveawaysContent() {
                     >
                       <div style={styles.taskDetails}>
                         <span style={isCompleted || isValidWallet ? styles.taskLabelSuccess : styles.taskLabel}>
-                          {task.label || (isSolanaTask ? 'Solana Wallet Submission' : 'Wallet Submission')} {task.required && '*'}
+                          {displayLabel} {task.required && '*'}
                         </span>
                         <span style={isCompleted || isValidWallet ? styles.taskSubSuccess : styles.taskSub}>
-                          {isSolanaTask ? 'Provide a valid Solana (SOL) wallet address for rewards.' : 'Provide EVM (0x...) or Solana wallet address for rewards.'}
+                          {isSolanaTask ? 'Provide a valid Solana (SOL) wallet address for rewards.' : 'Provide a valid Solana (SOL) or EVM (0x...) wallet address.'}
                         </span>
                         <div style={{ marginTop: '12px', display: 'flex', gap: '8px', width: '100%' }}>
                           <input
                             type="text"
-                            placeholder={isSolanaTask ? "Enter Solana Wallet Address (e.g. 7xKX...)" : "Enter EVM (0x...) or Solana Address"}
+                            placeholder={isSolanaTask ? "Enter Solana Wallet Address (e.g. 7xKX...)" : "Enter Solana (e.g. 7xKX...) or EVM (0x...) Address"}
                             value={localWalletInput}
                             onChange={(e) => {
                               const val = e.target.value;
