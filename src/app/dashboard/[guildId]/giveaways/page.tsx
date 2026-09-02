@@ -170,10 +170,12 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
     document.body.removeChild(link);
   };
 
-  const handleAddTask = (type: 'wallet_input' | 'custom_link' | 'custom_text') => {
+  const handleAddTask = (type: 'wallet_input' | 'solana_wallet_input' | 'custom_link' | 'custom_text') => {
     const id = `t-${Date.now()}`;
     if (type === 'wallet_input') {
       setTasks((prev) => [...prev, { id, type, label: 'Submit EVM Wallet Address', required: true }]);
+    } else if (type === 'solana_wallet_input') {
+      setTasks((prev) => [...prev, { id, type, label: 'Submit Solana (SOL) Wallet Address', required: true }]);
     } else if (type === 'custom_link') {
       setTasks((prev) => [...prev, { id, type, label: 'Follow our official X Account', url: 'https://x.com/', required: true }]);
     } else if (type === 'custom_text') {
@@ -783,7 +785,10 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
               <h3 style={{ fontSize: '0.9rem', color: 'var(--text-secondary)' }}>Entry Tasks</h3>
               <div style={{ display: 'flex', gap: '8px' }}>
                 <button type="button" onClick={() => handleAddTask('wallet_input')} style={styles.taskBtn}>
-                  + Wallet
+                  + EVM Wallet
+                </button>
+                <button type="button" onClick={() => handleAddTask('solana_wallet_input')} style={styles.taskBtn}>
+                  + Solana Wallet
                 </button>
                 <button type="button" onClick={() => handleAddTask('custom_link')} style={styles.taskBtn}>
                   + Link / Social
@@ -799,7 +804,7 @@ export default function AdminGiveawaysPage({ params }: PageProps) {
                 <div key={task.id} style={styles.taskBuilderItem}>
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                     <span style={styles.taskTypeBadge}>
-                      {task.type === 'wallet_input' ? 'Wallet Sub' : task.type === 'custom_text' ? 'Custom Text' : 'Link Task'}
+                      {task.type === 'wallet_input' ? 'EVM Wallet' : task.type === 'solana_wallet_input' ? 'Solana Wallet' : task.type === 'custom_text' ? 'Custom Text' : 'Link Task'}
                     </span>
                     <button type="button" onClick={() => handleRemoveTask(task.id)} style={styles.removeTaskBtn}>
                       Remove

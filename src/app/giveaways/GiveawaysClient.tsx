@@ -171,13 +171,25 @@ function GiveawaysContent() {
     setSubmitStatus('loading');
     setSubmitMessage('Submitting entry...');
 
-    // Validate EVM wallet input task
-    const hasWalletTask = giveaway.tasks?.some((t: any) => t.type === 'wallet_input');
-    if (hasWalletTask) {
-      if (!localWalletInput || !/^0x[a-fA-F0-9]{40}$/.test(localWalletInput)) {
-        setSubmitStatus('error');
-        setSubmitMessage('Please enter a valid Ethereum wallet address (0x...).');
-        return;
+    // Validate EVM / Solana wallet input task
+    const walletTask = giveaway.tasks?.find((t: any) => t.type === 'wallet_input' || t.type === 'solana_wallet_input');
+    if (walletTask) {
+      const cleanWallet = localWalletInput.trim();
+      const isEvm = /^0x[a-fA-F0-9]{40}$/.test(cleanWallet);
+      const isSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(cleanWallet);
+
+      if (walletTask.type === 'solana_wallet_input') {
+        if (!cleanWallet || !isSolana) {
+          setSubmitStatus('error');
+          setSubmitMessage('Please enter a valid Solana (SOL) wallet address.');
+          return;
+        }
+      } else {
+        if (!cleanWallet || (!isEvm && !isSolana)) {
+          setSubmitStatus('error');
+          setSubmitMessage('Please enter a valid EVM (0x...) or Solana wallet address.');
+          return;
+        }
       }
     }
 
@@ -437,27 +449,36 @@ function GiveawaysContent() {
               {giveaway.tasks?.map((task: any) => {
                 const isCompleted = tasksCompleted[task.id] === true;
 
-                if (task.type === 'wallet_input') {
+                if (task.type === 'wallet_input' || task.type === 'solana_wallet_input') {
+                  const isSolanaTask = task.type === 'solana_wallet_input';
+                  const cleanVal = localWalletInput.trim();
+                  const isEvm = /^0x[a-fA-F0-9]{40}$/.test(cleanVal);
+                  const isSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(cleanVal);
+                  const isValidWallet = isSolanaTask ? isSolana : (isEvm || isSolana);
+
                   return (
                     <div
                       key={task.id}
-                      style={isCompleted || localWalletInput ? styles.taskItemSuccess : styles.taskItemPending}
+                      style={isCompleted || isValidWallet ? styles.taskItemSuccess : styles.taskItemPending}
                     >
                       <div style={styles.taskDetails}>
-                        <span style={isCompleted || localWalletInput ? styles.taskLabelSuccess : styles.taskLabel}>
-                          Ethereum Wallet Submission {task.required && '*'}
+                        <span style={isCompleted || isValidWallet ? styles.taskLabelSuccess : styles.taskLabel}>
+                          {task.label || (isSolanaTask ? 'Solana Wallet Submission' : 'Wallet Submission')} {task.required && '*'}
                         </span>
-                        <span style={isCompleted || localWalletInput ? styles.taskSubSuccess : styles.taskSub}>
-                          Provide wallet for NFT/role rewards.
+                        <span style={isCompleted || isValidWallet ? styles.taskSubSuccess : styles.taskSub}>
+                          {isSolanaTask ? 'Provide a valid Solana (SOL) wallet address for rewards.' : 'Provide EVM (0x...) or Solana wallet address for rewards.'}
                         </span>
                         <div style={{ marginTop: '12px', display: 'flex', gap: '8px', width: '100%' }}>
                           <input
                             type="text"
-                            placeholder="Enter EVM Wallet (0x...)"
+                            placeholder={isSolanaTask ? "Enter Solana Wallet Address (e.g. 7xKX...)" : "Enter EVM (0x...) or Solana Address"}
                             value={localWalletInput}
                             onChange={(e) => {
-                              setLocalWalletInput(e.target.value);
-                              handleTaskComplete(task.id, /^0x[a-fA-F0-9]{40}$/.test(e.target.value));
+                              const val = e.target.value;
+                              setLocalWalletInput(val);
+                              const clean = val.trim();
+                              const valid = isSolanaTask ? /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(clean) : (/^0x[a-fA-F0-9]{40}$/.test(clean) || /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(clean));
+                              handleTaskComplete(task.id, valid);
                             }}
                             disabled={hasEntered}
                             style={styles.taskInput}

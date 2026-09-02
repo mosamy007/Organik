@@ -307,9 +307,19 @@ export async function PUT(req: NextRequest) {
       const isCompleted = tasksCompleted?.[task.id] === true;
 
       // Special tasks validation
-      if (task.type === 'wallet_input') {
-        if (!walletAddress || !/^0x[a-fA-F0-9]{40}$/.test(walletAddress)) {
-          return NextResponse.json({ error: 'A valid EVM wallet address is required to enter' }, { status: 400 });
+      if (task.type === 'wallet_input' || task.type === 'solana_wallet_input') {
+        const cleanWallet = (walletAddress || '').trim();
+        const isEvm = /^0x[a-fA-F0-9]{40}$/.test(cleanWallet);
+        const isSolana = /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(cleanWallet);
+
+        if (task.type === 'solana_wallet_input') {
+          if (!cleanWallet || !isSolana) {
+            return NextResponse.json({ error: 'A valid Solana (SOL) wallet address is required to enter' }, { status: 400 });
+          }
+        } else {
+          if (!cleanWallet || (!isEvm && !isSolana)) {
+            return NextResponse.json({ error: 'A valid EVM (0x...) or Solana wallet address is required to enter' }, { status: 400 });
+          }
         }
       }
 
